@@ -1,10 +1,7 @@
 import torch
-import numpy as np
 from tqdm import tqdm
 import logging
-from sklearn.metrics import confusion_matrix
-import sys
-
+from utils.metrics import class_acc, reg_acc
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
@@ -12,18 +9,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s
 logger = logging.getLogger(__name__)
 
 
-def accuracy(out, labels):
-    outputs = np.argmax(out, axis=1)
-    sys.stdout.flush()
-    print('\n')
-    # print('outputs are: {}'.format(outputs))
-    # print('labels are: {}'.format(labels))
-    print('confusion_matrix:\n', confusion_matrix(labels, outputs))
-    print('\n')
-    sys.stdout.flush()
-    return np.sum(outputs == labels)
-
-def evaluate(args, model, eval_dataloader, device, global_step=None, tr_loss=None, nb_tr_steps=None):
+def evaluate(args, model, eval_dataloader, device, task_type, global_step=None, tr_loss=None, nb_tr_steps=None):
 
     eval_loss, eval_accuracy = 0, 0
     nb_eval_steps, nb_eval_examples = 0, 0
@@ -41,7 +27,10 @@ def evaluate(args, model, eval_dataloader, device, global_step=None, tr_loss=Non
 
         logits = logits.detach().cpu().numpy()
         label_ids = label_ids.to('cpu').numpy()
-        tmp_eval_accuracy = accuracy(logits, label_ids)
+        if task_type == 0:
+            tmp_eval_accuracy = class_acc(logits, label_ids)
+        else:
+            tmp_eval_accuracy = reg_acc(logits, label_ids)
 
         eval_loss += tmp_eval_loss.mean().item()
         eval_accuracy += tmp_eval_accuracy

@@ -37,7 +37,6 @@ from tqdm import tqdm, trange
 
 from arguments import define_args
 from modeling_tpr import BertForSequenceClassification_tpr
-from optimizers.RAdam import RAdam
 from utils.data_utils import *
 from utils.evaluation import evaluate
 from utils.prediction import predict
@@ -97,7 +96,7 @@ def main(args):
             logger.warning('changing Role dimension from {} to {} to match number of Roles'.format(args.dRoles, args.nRoles))
             setattr(args, 'dRoles', args.nRoles)
 
-    processors = {
+    PROCESSORS = {
         'dnc_acc': ACCProcessor,
         'dnc_nli': NLIProcessor,
         'hans': HANSProcessor,
@@ -109,15 +108,15 @@ def main(args):
         'rte': RTEProcessor,
         'mrpc': MRPCProcessor,
         'sst': SSTProcessor,
-        # 'sts': STSProcessor,
+        'sts': STSProcessor,
         'cola': COLAProcessor,
         'copa': COPAProcessor
     }
 
-    num_labels_task = {
+    NUM_LABELS_TASK = {
      'dnc_acc': 2,
      'dnc_nli': 3,
-     'hans': 3,
+     'hans': 3, # 3-way prediction followed by combining contradiction and neutral into one
      'mnli': 3,
      'snli': 3,
      'qqp': 2,
@@ -126,9 +125,26 @@ def main(args):
      'rte': 2,
      'mrpc': 2,
      'sst': 2,
-     # 'sts': 1,
+     'sts': 1,
      'cola': 2,
      'copa': 2
+    }
+
+    TASK_TYPE = { # 0 for classification and 1 for regression
+     'dnc_acc': 0,
+     'dnc_nli': 0,
+     'hans': 0,
+     'mnli': 0,
+     'snli': 0,
+     'qqp': 0,
+     'qnli': 0,
+     'wnli': 0,
+     'rte': 0,
+     'mrpc': 0,
+     'sst': 0,
+     'sts': 1,
+     'cola': 0,
+     'copa': 0
     }
 
 
@@ -160,12 +176,15 @@ def main(args):
         raise ValueError("At least one of `do_train` or `do_eval` or 'do_test' must be True.")
     task_name = args.task_name.lower()
 
-    if task_name not in processors:
+    if task_name not in PROCESSORS:
         raise ValueError("Task not found: %s" % (task_name))
 
-    processor = processors[task_name](args.num_ex)
-    num_labels = num_labels_task[task_name]
-    label_list = processor.get_labels()
+    processor = PROCESSORS[task_name](args.num_ex)
+    num_labels = NUM_LABELS_TASK[task_name]
+    task_type = TASK_TYPE[task_name]
+    label_list = None
+    if task_type != 1:
+        label_list = processor.get_labels()
 
     if 'uncased' in args.bert_model and not args.do_lower_case:
         logger.warning('do_lower_case should be True if uncased bert models are used')
@@ -186,7 +205,10 @@ def main(args):
         all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
         all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
         all_sub_word_masks = torch.tensor([f.sub_word_masks for f in eval_features], dtype=torch.long)
-        all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
+        if task_type != 1:
+            all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
+        else:
+            all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.float32)
         eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_sub_word_masks, all_label_ids)
 
         eval_sampler = SequentialSampler(eval_data)
@@ -218,6 +240,7 @@ def main(args):
         bert_config.num_hidden_layers = args.num_bert_layers
         model = BertForSequenceClassification_tpr(bert_config,
                                                   num_labels=num_labels,
+                                                  task_type=task_type,
                                                   nSymbols=args.nSymbols,
                                                   nRoles=args.nRoles,
                                                   dSymbols=args.dSymbols,
@@ -328,7 +351,10 @@ def main(args):
         all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
         all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
         all_sub_word_masks = torch.tensor([f.sub_word_masks for f in train_features], dtype=torch.long)
-        all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long)
+        if task_type != 1:
+            all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long)
+        else:
+            all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.float32)
         train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_sub_word_masks, all_label_ids)
         if args.local_rank == -1:
             train_sampler = RandomSampler(train_data)
@@ -394,27 +420,30 @@ def main(args):
                     tensorboard_writer.add_scalar('train/loss', tr_loss, global_step)
 
             # Save a trained model after each epoch
-            if not args.save_best_only:
+            if not args.save_best_only or not args.do_eval:
                 model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
                 output_model_file = os.path.join(args.output_dir, "pytorch_model_{}.bin".format(epoch))
+                logger.info("Saving checkpoint pytorch_model_{}.bin to {}".format(epoch, args.output_dir))
                 torch.save({'state_dict': model_to_save.state_dict(), 'options': opt, 'bert_config': bert_config}, output_model_file)
 
-            # evaluate model after every epoch
-            model.eval()
-            result = evaluate(args, model, eval_dataloader, device, global_step, tr_loss, nb_tr_steps)
-            for key in sorted(result.keys()):
-                if key == 'eval_loss':
-                    tensorboard_writer.add_scalar('eval/loss', result[key], global_step)
-                elif key == 'eval_accuracy':
-                    tensorboard_writer.add_scalar('eval/accuracy', result[key], global_step)
-                logger.info("  %s = %s", key, str(result[key]))
+            if args.do_eval:
+                # evaluate model after every epoch
+                model.eval()
+                result = evaluate(args, model, eval_dataloader, device, task_type, global_step, tr_loss, nb_tr_steps)
+                for key in sorted(result.keys()):
+                    if key == 'eval_loss':
+                        tensorboard_writer.add_scalar('eval/loss', result[key], global_step)
+                    elif key == 'eval_accuracy':
+                        tensorboard_writer.add_scalar('eval/accuracy', result[key], global_step)
+                    logger.info("  %s = %s", key, str(result[key]))
 
-            if result['eval_accuracy'] > best_eval_accuracy:
-                best_eval_accuracy = result['eval_accuracy']
-                # Save the best model
-                model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-                output_model_file = os.path.join(args.output_dir, "pytorch_model_best.bin")
-                torch.save({'state_dict': model_to_save.state_dict(), 'options': opt, 'bert_config': bert_config}, output_model_file)
+                if result['eval_accuracy'] >= best_eval_accuracy:
+                    best_eval_accuracy = result['eval_accuracy']
+                    # Save the best model
+                    model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+                    output_model_file = os.path.join(args.output_dir, "pytorch_model_best.bin")
+                    logger.info("Saving checkpoint pytorch_model_best.bin to {}".format(args.output_dir))
+                    torch.save({'state_dict': model_to_save.state_dict(), 'options': opt, 'bert_config': bert_config}, output_model_file)
 
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
@@ -436,6 +465,7 @@ def main(args):
         print('option for evaluation: {}'.format(args))
         model = BertForSequenceClassification_tpr(bert_config,
                                                   num_labels=num_labels,
+                                                  task_type=task_type,
                                                   nSymbols=args.nSymbols,
                                                   nRoles=args.nRoles,
                                                   dSymbols=args.dSymbols,
@@ -453,7 +483,7 @@ def main(args):
         model.load_state_dict(model_state_dict)
         model.to(device)
         model.eval()
-        result = evaluate(args, model, eval_dataloader, device)
+        result = evaluate(args, model, eval_dataloader, device, task_type)
 
 
         output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
@@ -491,6 +521,7 @@ def main(args):
 
         model = BertForSequenceClassification_tpr(bert_config,
                                                   num_labels=num_labels,
+                                                  task_type=task_type,
                                                   nSymbols=args.nSymbols,
                                                   nRoles=args.nRoles,
                                                   dSymbols=args.dSymbols,
@@ -527,7 +558,7 @@ def main(args):
                 test_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_sub_word_masks)
                 test_sampler = SequentialSampler(test_data)
                 test_dataloader = DataLoader(test_data, sampler=test_sampler, batch_size=args.eval_batch_size)
-                result = predict(args, model, test_dataloader, all_guids, device)
+                result = predict(args, model, test_dataloader, all_guids, device, task_type)
 
                 output_test_file = os.path.join(args.output_dir, "{}-test_predictions.txt".format(k))
                 logger.info("***** Test predictions *****")
@@ -560,7 +591,7 @@ def main(args):
             test_sampler = SequentialSampler(test_data)
             test_dataloader = DataLoader(test_data, sampler=test_sampler, batch_size=args.eval_batch_size)
 
-            result = predict(args, model, test_dataloader, all_guids, device)
+            result = predict(args, model, test_dataloader, all_guids, device, task_type)
 
             output_test_file = os.path.join(args.output_dir, "test_predictions.txt")
             logger.info("***** Test predictions *****")
@@ -571,6 +602,8 @@ def main(args):
                     if task_name == 'hans':
                         if pred == 2: pred = 0  #consider neutral as non-entailment
                         writer.write("%s,%s\n" % (id, label_list[pred]))
+                    elif task_type == 1:
+                        writer.write("%s\t%s\n" % (id, pred))
                     else:
                         writer.write("%s\t%s\n" % (id, label_list[pred]))
                 if task_name == 'snli':

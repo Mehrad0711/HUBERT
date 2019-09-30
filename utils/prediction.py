@@ -1,27 +1,15 @@
-import torch
-import numpy as np
-from tqdm import tqdm
 import logging
-from sklearn.metrics import confusion_matrix
-import sys
-
+import numpy as np
+import torch
+from tqdm import tqdm
+from utils.metrics import class_acc, reg_acc
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-def accuracy(out, labels):
-    outputs = np.argmax(out, axis=1)
-    sys.stdout.flush()
-    print('\n')
-    print('confusion_matrix:\n', confusion_matrix(labels, outputs))
-    print('\n')
-    sys.stdout.flush()
-    return np.sum(outputs == labels)
-
-def predict(args, model, test_dataloader, all_guids, device):
+def predict(args, model, test_dataloader, all_guids, device, task_type):
 
     test_loss, test_accuracy = 0, 0
     nb_test_steps, nb_test_examples = 0, 0
@@ -45,12 +33,18 @@ def predict(args, model, test_dataloader, all_guids, device):
 
         logits = logits.detach().cpu().numpy()
 
-        predictions = np.argmax(logits, axis=1)
+        if task_type != 1:
+            predictions = np.argmax(logits, axis=1)
+        else:
+            predictions = logits
         nb_test_examples += input_ids.size(0)
 
         if args.task_name.lower() == 'snli':
             label_ids = label_ids.to('cpu').numpy()
-            tmp_test_accuracy = accuracy(logits, label_ids)
+            if task_type == 0:
+                tmp_test_accuracy = class_acc(logits, label_ids)
+            else:
+                tmp_test_accuracy = reg_acc(logits, label_ids)
             test_accuracy += tmp_test_accuracy
 
         nb_test_steps += 1

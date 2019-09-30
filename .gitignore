@@ -8,6 +8,12 @@ __pycache__/
 
 # extras
 .DS_Store
+run_travis.sh
+.idea
+Pipfile*
+results
+trained_models
+hubert-tests*
 
 
 # Distribution / packaging

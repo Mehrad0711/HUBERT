@@ -24,9 +24,10 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
     """
     BERT model for classification (+ tpr)
     """
-    def __init__(self, config, nSymbols, nRoles, dSymbols, dRoles, temperature, max_seq_len, num_labels, **kwargs):
+    def __init__(self, config, nSymbols, nRoles, dSymbols, dRoles, temperature, max_seq_len, num_labels, task_type, **kwargs):
         super(BertForSequenceClassification_tpr, self).__init__(config)
         self.num_labels = num_labels
+        self.task_type = task_type
         self.sub_word_masking = kwargs['sub_word_masking']
         self.ortho_reg = kwargs.get('ortho_reg', 0.0)
         self.bert = BertModel(config)
@@ -157,8 +158,14 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
         logits = self.classifier(cls_input)
 
         if labels is not None:
-            loss_fct = nn.CrossEntropyLoss()
-            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-            return loss + self.ortho_reg * R_loss if R_loss is not None else loss
+            if self.task_type == 0:
+                loss_fct = nn.CrossEntropyLoss()
+                loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+                return loss + self.ortho_reg * R_loss if R_loss is not None else loss
+            else:
+                loss_fct = nn.MSELoss()
+                loss = loss_fct(logits.view(-1, 1), labels.view(-1, 1))
+                return loss + self.ortho_reg * R_loss if R_loss is not None else loss
+
         else:
             return logits

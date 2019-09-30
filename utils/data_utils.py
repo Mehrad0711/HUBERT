@@ -1,7 +1,7 @@
 import csv
 import json
-import os
 import logging
+import os
 from collections import defaultdict
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
@@ -154,7 +154,7 @@ class ACCProcessor(DataProcessor):
     """Processor for the SNLI data set (GLUE version)."""
 
     def __init__(self, num_ex):
-        super(ACCrocessor, self).__init__(num_ex)
+        super(ACCProcessor, self).__init__(num_ex)
         self.data = defaultdict()
         # self.metadata = defaultdict()
 
@@ -590,7 +590,7 @@ class STSProcessor(DataProcessor):
     """Processor for the STS data set (GLUE version)."""
 
     def __init__(self, num_ex):
-        super(WNLIProcessor, self).__init__(num_ex)
+        super(STSProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -718,7 +718,9 @@ class COPAProcessor(DataProcessor):
 def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer):
     """Loads a data file into a list of `InputBatch`s."""
 
-    label_map = {label: i for i, label in enumerate(label_list)}
+    label_map = None
+    if label_list:
+        label_map = {label: i for i, label in enumerate(label_list)}
 
     features = []
     for (ex_index, example) in enumerate(examples):
@@ -783,10 +785,18 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         assert len(segment_ids) == max_seq_length
         assert len(sub_word_masks) == max_seq_length
 
-        if example.label is not None:
-            label_id = label_map[example.label]
+
+        if label_map:
+            if example.label:
+                label_id = label_map[example.label]
+            else:
+                label_id = None
         else:
-            label_id = None
+            if example.label:
+                label_id = float(example.label)
+            else:
+                label_id = None
+
         guid = example.guid
 
         if ex_index < 5:
@@ -814,7 +824,9 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
 def convert_multi_examples_to_features(examples, label_list, max_seq_length, tokenizer):
     """Loads a data file into a list of `InputBatch`s."""
 
-    label_map = {label: i for i, label in enumerate(label_list)}
+    label_map = None
+    if label_list:
+        label_map = {label: i for i, label in enumerate(label_list)}
 
     features = []
     for (ex_index, example) in enumerate(examples):
@@ -884,10 +896,16 @@ def convert_multi_examples_to_features(examples, label_list, max_seq_length, tok
             segment_ids_list.append(segment_ids)
             sub_word_masks_list.append(sub_word_masks)
 
-            if example.label is not None:
-                label_id = label_map[example.label]
+            if label_map:
+                if example.label:
+                    label_id = label_map[example.label]
+                else:
+                    label_id = None
             else:
-                label_id = None
+                if example.label:
+                    label_id = float(example.label)
+                else:
+                    label_id = None
 
             if ex_index < 5:
                 logger.info("*** Example ***")
@@ -906,7 +924,7 @@ def convert_multi_examples_to_features(examples, label_list, max_seq_length, tok
                           input_mask=input_mask_list,
                           segment_ids=segment_ids_list,
                           sub_word_masks=sub_word_masks_list,
-                          label_id=label_map[example.label]))
+                          label_id=label_id))
     return features
 
 

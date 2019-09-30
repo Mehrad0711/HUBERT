@@ -27,8 +27,8 @@ Mehrad Moradshahi, Hamid Palangi, Monica S. Lam, Paul Smolensky, Jianfeng Gao<br
 ### Dataset
 
 1. Download GLUE, SNLI, and HANS: </br>
-   ```> sh utils/download_data.sh``` </br>
-    The files will be downloaded to "data" directory
+   ```> sh utils/download_data.sh $DATA_DIR``` </br>
+    The files will be downloaded to $DATA_DIR (default path is './data').
 
 ### Train and test model
 
@@ -41,14 +41,14 @@ Mehrad Moradshahi, Hamid Palangi, Monica S. Lam, Paul Smolensky, Jianfeng Gao<br
 	```bash
 	python3 run_model.py --task_name $task --data_dir ./data/$task/ --bert_model bert-base-uncased --do_train True --do_eval False --do_test False --output_dir ./$results --train_batch_size 256 --num_train_epochs 10
 	```
-Optionally, you can evalaute your model on dev set after each epoch by setting --do_eval to True. Model checkpoints are saved after every epoch.
-Multi-GPU training is automatically on, so if you have more than 1 GPU, distributed training will perform automatically.
+	After every epoch, your model will be saved and evaluatd on dev set. If you wish to only keep the best model checkpoint (i.e. having the best accuracy on dev set) set ```--save_best_only``` to True. 
+	Multi-GPU training is automatically on, so if you have more than 1 GPU, distributed training will be performed automatically.
 
 2. Testing</br>
 	```bash
 	python3 run_model.py --no_cuda True --task_name $task --data_dir ./data/$task/ --bert_model bert-base-uncased --do_train False --do_eval False --do_test True --load_ckpt ./$results/pytorch_model_best.bin --eval_batch_size 512 
 	```
-setting no_cuda to True will run the experiments on CPU. (thus, you can use a bigger batch_size for evaluation since CPU has more memory than GPU)
+	setting no_cuda to True will run the experiments on CPU. (thus, you can use a bigger batch_size for evaluation since CPU has more memory than GPU)
 
 
 ### Transfer Learning experiments
@@ -56,21 +56,22 @@ setting no_cuda to True will run the experiments on CPU. (thus, you can use a bi
 	```bash
 	python3 run_model.py --task_name MNLI --data_dir ./data/MNLI/ --bert_model bert-base-uncased --do_train True --dSymbols 30 --dRoles 30 --nSymbols 50 --nRoles 35 --num_train_epochs 10 --output_dir ./$trained_models/MNLI 
 	```
-You should get ~84% accuracy on MNLI matched dev set.
+youou should get ~84% accuracy on MNLI matched dev set.
 
 2. Second, load the fine-tuned model and initialize a second (only pre-trained) HUBERT model with the desired subset of paprameters from the former model. Then train, evalaute and test the model on the target task. For example when your target task is QQP and you only want to load roles:</br>
 	```bash
-	python3 run_model.py  --task_name QQP --data_dir ../data/QQP/ --do_train True --do_eval True --load_ckpt ./$trained_models/MNLI/pytorch_model_best.bin --output_dir ./$final_results --num_train_epochs 10 --load_bert_params False --load_role True --load_filler False
+	python3 run_model.py  --task_name QQP --data_dir ../data/QQP/ --bert_model bert-base-uncased --do_train True --do_eval True --load_ckpt ./$trained_models/MNLI/pytorch_model_best.bin --output_dir ./$final_results --num_train_epochs 10 --load_bert_params False --load_role True --load_filler False
 	```
 
-You should get ~91.42% accuracy on QQP dev set.
+	You should get ~91.42% accuracy on QQP dev set.
 
 
 3. To evaluate your models on HANS, first run this command to generate the predictions:</br>
 	```bash
-	python3 run_model.py --no_cuda True --task_name HANS --data_dir ./data/HANS/ --do_test True --load_ckpt ./$final_results/pytorch_model_best.bin --eval_batch_size 512 --output_dir ./predictions/
+	python3 run_model.py --no_cuda True --task_name HANS --data_dir ./data/HANS/ --bert_model bert-base-uncased --do_test True --load_ckpt ./$final_results/pytorch_model_best.bin --eval_batch_size 512 --output_dir ./predictions/
 	```
-and then this command to produce the results broken down into different categories:</br>
+	and then this command to produce the results broken down into different categories:</br>
+
 	```bash
 	python3 ./data/HANS/evaluate_heur_output.py ./predictions/test_predictions.txt
 	```
@@ -85,7 +86,7 @@ To use mixed-precision please install [apex](https://github.com/NVIDIA/apex) </b
 ### TODOs
 
 - [ ] Add Travis for code testing
-- [ ] Option for multi-task training
+- [ ] Option for continual training
 - [ ] Support regression tasks (e.g. STS)
 
 ## Acknowledgments
