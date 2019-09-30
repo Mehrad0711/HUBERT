@@ -15,7 +15,7 @@
 # limitations under the License.
 
 import torch
-from torch import nn
+import torch.nn as nn
 from pytorch_pretrained_bert.modeling import BertPreTrainedModel, BertModel
 from tpr import RNNencoder, TPRencoder_lstm, TPRencoder_transformers
 

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
+import torch.nn.functional as F
 import math
 from torch.nn.init import calculate_gain, _calculate_correct_fan, _calculate_fan_in_and_fan_out
 

@@ -1,5 +1,5 @@
 import torch
-from torch import nn
+import torch.nn as nn
 
 from modules.layers import ScaleLinear
 from modules.transformers import TransformerEncoderLayer
@@ -272,12 +272,12 @@ class TPRencoder_transformers(nn.Module):
         seq = x.size(1)
 
         src_mask = None
-        src_key_padding_mask = None
+        src_key_pad_mask = None
         if self.do_src_mask:
-            src_key_padding_mask = src_key_padding_mask
+            src_key_pad_mask = src_key_padding_mask
 
-        aF = self.enc_aF(x.transpose(0, 1), src_mask=src_mask, src_key_padding_mask=src_key_padding_mask)
-        aR = self.enc_aR(x.transpose(0, 1), src_mask=src_mask, src_key_padding_mask=src_key_padding_mask)
+        aF = self.enc_aF(x.transpose(0, 1), src_mask=src_mask, src_key_padding_mask=src_key_pad_mask)
+        aR = self.enc_aR(x.transpose(0, 1), src_mask=src_mask, src_key_padding_mask=src_key_pad_mask)
 
         aF = self.WaF(aF)
         aR = self.WaR(aR)
