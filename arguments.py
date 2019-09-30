@@ -200,11 +200,11 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help='whether scale factor should be trainable')
-    parser.add_argument("--pooling",
+    parser.add_argument("--aggregate",
                         type=str,
                         default='none',
                         choices=['sum', 'mean', 'concat', 'none'],
-                        help='type of pooling to perform on top of RNN layer')
+                        help='type of aggregation to perform on top of head layer')
     parser.add_argument("--freeze_bert",
                         type=str2bool,
                         default=False,

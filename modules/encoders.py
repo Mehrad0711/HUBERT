@@ -1,33 +1,32 @@
 import torch
 import torch.nn as nn
-
 from modules.layers import ScaleLinear
 from modules.transformers import TransformerEncoderLayer
 
 
 class RNNencoder(nn.Module):
-    def __init__(self, in_dim, num_hid, nlayers, bidirect, dropout, rnn_type='LSTM'):
+    def __init__(self, encoder_args):
         """
         RNN encoder on the top of sequences in bert.
         """
         super(RNNencoder, self).__init__()
-        assert rnn_type == 'LSTM' or rnn_type == 'GRU'
-        if rnn_type == 'LSTM':
+
+        for a in encoder_args.keys():
+            setattr(self, a, encoder_args[a])
+
+        assert self.rnn_type == 'LSTM' or self.rnn_type == 'GRU'
+        if self.rnn_type == 'LSTM':
             rnn_cls = nn.LSTM
         else:
             rnn_cls = nn.GRU
 
         self.rnn = rnn_cls(
-            in_dim, num_hid, nlayers,
+            self.in_dim, self.num_hid, self.nlayers,
             bidirectional=True,
-            dropout=dropout,
+            dropout=self.dropout,
             batch_first=True)
 
-        self.in_dim = in_dim
-        self.num_hid = num_hid
-        self.nlayers = nlayers
-        self.rnn_type = rnn_type
-        self.ndirections = 1 + int(bidirect)
+        self.ndirections = 1 + int(self.bidirect)
 
     def init_hidden(self, batch):
         # just to get the type of tensor
@@ -64,53 +63,43 @@ class RNNencoder(nn.Module):
 
 
 class TPRencoder_lstm(nn.Module):
-    def __init__(self, in_dim, nSymbols, nRoles, dSymbols, dRoles, temperature, nlayers, bidirect, dropout, fixed_Role, scale_val,
-                 train_scale, rnn_type):
+    def __init__(self, encoder_args):
         """
         TPR encoder on the top of sequences in bert.
         """
+        for a in encoder_args.keys():
+            setattr(self, a, encoder_args[a])
+
         super(TPRencoder_lstm, self).__init__()
-        assert rnn_type == 'LSTM' or rnn_type == 'GRU'
-        if rnn_type == 'LSTM':
+        assert self.rnn_type == 'LSTM' or self.rnn_type == 'GRU'
+        if self.rnn_type == 'LSTM':
             rnn_cls = nn.LSTM
         else:
             rnn_cls = nn.GRU
 
-        self.nSymbols = nSymbols
-        self.nRoles = nRoles
-        self.dSymbols = dSymbols
-        self.dRoles = dRoles
-        self.temperature = temperature
-        self.out_dim = dSymbols * dRoles
-        self.fixed_Role = fixed_Role
-        self.train_scale = train_scale
-        self.scale_val = scale_val
         self.rnn_aF = rnn_cls(
-            in_dim, self.out_dim, nlayers,
+            self.in_dim, self.out_dim, self.nlayers,
             bidirectional=False,
-            dropout=dropout,
+            dropout=self.dropout,
             batch_first=True)
         self.rnn_aR = rnn_cls(
-            in_dim, self.out_dim, nlayers,
+            self.in_dim, self.out_dim, self.nlayers,
             bidirectional=False,
-            dropout=dropout,
+            dropout=self.dropout,
             batch_first=True)
 
         self.scale = nn.Parameter(torch.tensor(self.scale_val, dtype=self.get_dtype()), requires_grad=self.train_scale)
         print('self.scale requires grad is: {}'.format(self.scale.requires_grad))
 
-        self.in_dim = in_dim
-        self.nlayers = nlayers
-        self.rnn_type = rnn_type
-        self.ndirections = 1 + int(bidirect)
-        self.F = ScaleLinear(nSymbols, dSymbols, scale_val=self.scale_val)
+        self.ndirections = 1 + int(self.bidirect)
+        self.F = ScaleLinear(self.nSymbols, self.Symbols, scale_val=self.scale_val)
 
         if self.fixed_Role:
             self.R = nn.Parameter(torch.eye(self.nRoles), requires_grad=False)
         else:
-            self.R = ScaleLinear(nRoles, dRoles, scale_val=self.scale_val)
-        self.WaF = nn.Linear(self.out_dim, nSymbols)
-        self.WaR = nn.Linear(self.out_dim, nRoles)
+            self.R = ScaleLinear(self.nRoles, self.dRoles, scale_val=self.scale_val)
+        self.WaF = nn.Linear(self.out_dim, self.nSymbols)
+        self.WaR = nn.Linear(self.out_dim, self.nRoles)
         self.softmax = nn.Softmax(dim=2)
 
 
@@ -231,14 +220,14 @@ class TPRencoder_lstm(nn.Module):
 
 
 class TPRencoder_transformers(nn.Module):
-    def __init__(self, args):
+    def __init__(self, encoder_args):
         """
         TPR encoder on the top of sequences in bert.
         """
         super(TPRencoder_transformers, self).__init__()
 
-        for a in args.keys():
-            setattr(self, a, args[a])
+        for a in encoder_args.keys():
+            setattr(self, a, encoder_args[a])
 
         self.enc_aF = TransformerEncoderLayer(self.in_dim, self.num_heads, self.num_hid, self.dropout)
         self.enc_aR = TransformerEncoderLayer(self.in_dim, self.num_heads, self.num_hid, self.dropout)
@@ -253,18 +242,8 @@ class TPRencoder_transformers(nn.Module):
         self.WaR = nn.Linear(self.num_hid, self.nRoles)
         self.softmax = nn.Softmax(dim=2)
 
-
     def get_dtype(self):
         return next(self.parameters()).dtype
-
-    def init_hidden(self, batch):
-        # just to get the type of tensor
-        weight = next(self.parameters()).data
-        hid_shape = (self.nlayers, batch, self.out_dim)
-        if self.rnn_type == 'LSTM':
-            return (weight.new(*hid_shape).zero_(), weight.new(*hid_shape).zero_())
-        else:
-            return weight.new(*hid_shape).zero_()
 
     def forward(self, x, src_key_padding_mask=None):
         # x: [batch, sequence, in_dim]

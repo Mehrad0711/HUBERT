@@ -17,7 +17,7 @@
 import torch
 import torch.nn as nn
 from transformers.modeling_bert import BertPreTrainedModel, BertModel
-from tpr import RNNencoder, TPRencoder_lstm, TPRencoder_transformers
+from modules.encoders import RNNencoder, TPRencoder_lstm, TPRencoder_transformers
 
 
 class BertForSequenceClassification_tpr(BertPreTrainedModel):
@@ -42,76 +42,64 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
         self.num_directs = 1 + int(kwargs['bidirect'])
         self.cls = kwargs.get('cls', 'v1')
         self.encoder = kwargs['encoder']
-        self.pooling = kwargs['pooling']
+        self.aggregate = kwargs['aggregate']
 
         hidden_size = config.hidden_size
 
+        # define the classifier
         if self.encoder == 'lstm':
-            self.rnn = RNNencoder(hidden_size, hidden_size, nlayers=self.num_layers, bidirect=kwargs['bidirect'],
-                                  dropout=0.0, rnn_type='LSTM')
-            if self.cls == 'v1':
-                self.classifier = nn.Linear(hidden_size * self.num_directs, num_labels)
-            elif self.cls == 'v2':
-                self.activation1 = nn.LeakyReLU()
-                self.linear1 = nn.Linear(hidden_size * self.num_directs, hidden_size * self.num_directs // 10)
-                self.activation2 = nn.LeakyReLU()
-                self.linear2 = nn.Linear(hidden_size * self.num_directs // 10, hidden_size * self.num_directs // 100, )
-                self.classifier = nn.Sequential(self.linear1, self.activation1, self.linear2, self.activation2)
+            hidden_dimension = hidden_size * self.num_directs
+        elif self.encoder == 'tpr_lstm':
+            hidden_dimension = dSymbols * dRoles * self.num_directs
+        elif self.encoder == 'tpr_transformers':
+            hidden_dimension = dSymbols * dRoles
+        else:
+            hidden_dimension = hidden_size
 
-            if self.pooling == 'concat':
-                self.proj = nn.Linear(max_seq_len * hidden_size * self.num_directs, hidden_size * self.num_directs)
+        if self.cls == 'v1':
+            self.classifier = nn.Linear(hidden_dimension, num_labels)
+        elif self.cls == 'v2':
+            self.activation1 = nn.LeakyReLU()
+            self.linear1 = nn.Linear(hidden_dimension, hidden_dimension // 10)
+            self.activation2 = nn.LeakyReLU()
+            self.linear2 = nn.Linear(hidden_dimension // 10, hidden_dimension // 100, )
+            self.classifier = nn.Sequential(self.linear1, self.activation1, self.linear2, self.activation2)
+
+        # define aggregation layer
+        if self.aggregate == 'none' and self.encoder == 'tpr_transformers':
+            print('tpr_transformers outputs should be aggregated! since no aggregation is provided #concat# will be used by default')
+            self.aggregate = 'concat'
+
+        if self.aggregate == 'concat':
+            self.proj = nn.Linear(max_seq_len * hidden_dimension, hidden_dimension)
+
+        # define the encoder and aggregation layer
+        if self.encoder == 'lstm':
+            encoder_args = {'in_dim': hidden_size, 'num_hid': hidden_size, 'nlayers': self.num_layers,
+                            'dropout': 0.0, 'bidirect': kwargs['bidirect'], 'rnn_type': 'LSTM'}
+            self.head = RNNencoder(encoder_args)
 
         elif self.encoder == 'tpr_lstm':
-            self.rnn = TPRencoder_lstm(hidden_size, nSymbols, nRoles, dSymbols, dRoles, temperature,
-                                       self.num_layers, bidirect=kwargs['bidirect'], dropout=0.0,
-                                       fixed_Role=kwargs['fixed_Role'], scale_val=kwargs['scale_val'],
-                                       train_scale=kwargs['train_scale'], rnn_type='LSTM')
-
-            if self.cls == 'v1':
-                self.classifier = nn.Linear(dSymbols * dRoles * self.num_directs, num_labels)
-            elif self.cls == 'v2':
-                self.activation1 = nn.LeakyReLU()
-                self.linear1 = nn.Linear(dSymbols * dRoles * self.num_directs,
-                                         dSymbols * dRoles * self.num_directs // 10)
-                self.activation2 = nn.LeakyReLU()
-                self.linear2 = nn.Linear(dSymbols * dRoles * self.num_directs // 10,
-                                         dSymbols * dRoles * self.num_directs // 100)
-                self.classifier = nn.Sequential(self.linear1, self.activation1, self.linear2, self.activation2)
-
-            if self.pooling == 'concat':
-                self.proj = nn.Linear(max_seq_len * dSymbols * dRoles * self.num_directs,
-                                      dSymbols * dRoles * self.num_directs)
+            encoder_args = {'in_dim': hidden_size, 'nSymbols': nSymbols, 'nRoles': nRoles,
+                            'dSymbols': dSymbols, 'dRoles': dRoles, 'temperature': temperature,
+                           'nlayers': self.num_layers, 'bidirect': kwargs['bidirect'], 'dropout': 0.0,
+                           'fixed_Role': kwargs['fixed_Role'], 'scale_val': kwargs['scale_val'],
+                           'train_scale': kwargs['train_scale'], 'rnn_type': 'LSTM'}
+            self.head = TPRencoder_lstm(encoder_args)
 
         elif self.encoder == 'tpr_transformers':
-            args = {'in_dim': hidden_size, 'num_hid': hidden_size, 'num_heads': kwargs['num_heads'],
+            encoder_args = {'in_dim': hidden_size, 'num_hid': hidden_size, 'num_heads': kwargs['num_heads'],
                     'nSymbols': nSymbols, 'nRoles': nRoles, 'dSymbols': dSymbols, 'dRoles': dRoles,
-                    'temperature': temperature, 'nlayers': self.num_layers, 'dropout': 0.0,
+                    'temperature': temperature, 'dropout': 0.0,
                     'fixed_Role': kwargs['fixed_Role'], 'train_scale': kwargs['train_scale'],
-                    'scale_val': kwargs['scale_val']}
-            args.update({'do_src_mask': kwargs['do_src_mask']})
-            self.rnn = TPRencoder_transformers(args)
-
-            if self.cls == 'v1':
-                self.classifier = nn.Linear(dSymbols * dRoles, num_labels)
-            elif self.cls == 'v2':
-                self.activation1 = nn.LeakyReLU()
-                self.linear1 = nn.Linear(dSymbols * dRoles, dSymbols * dRoles // 10)
-                self.activation2 = nn.LeakyReLU()
-                self.linear2 = nn.Linear(dSymbols * dRoles // 10, dSymbols * dRoles // 100)
-                self.classifier = nn.Sequential(self.linear1, self.activation1, self.linear2, self.activation2)
-
-            if self.pooling == 'none':
-                print(
-                    'tpr_transformers outputs should be pooled! since no pooling is provided #concat# will be used by default')
-                self.pooling = 'concat'
-            if self.pooling == 'concat':
-                self.proj = nn.Linear(max_seq_len * dSymbols * dRoles, dSymbols * dRoles)
+                    'scale_val': kwargs['scale_val'], 'do_src_mask': kwargs['do_src_mask']}
+            self.head = TPRencoder_transformers(encoder_args)
 
         else:
             self.classifier = nn.Linear(768, num_labels)
 
         if hasattr(self, 'rnn'):
-            print('num_elems:', sum([p.nelement() for p in self.rnn.parameters() if p.requires_grad]))
+            print('num_elems:', sum([p.nelement() for p in self.head.parameters() if p.requires_grad]))
 
         self.apply(self._init_weights)
 
@@ -142,23 +130,23 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
         final_mask = attention_mask.unsqueeze(2).type(yb.type())
         yb_masked = yb * final_mask
         if self.encoder == 'lstm':
-            yb_rnn, last_yb_rnn = self.rnn.call(yb_masked)
+            yb_rnn, last_yb_rnn = self.head.call(yb_masked)
 
         elif self.encoder == 'tpr_lstm':
-            yb_rnn, (last_yb_rnn, aFs, aRs), R_loss = self.rnn.call(
+            yb_rnn, (last_yb_rnn, aFs, aRs), R_loss = self.head.call(
                 yb_masked)  # aFs/ aRs: [batch, seq_len, nSymbols, num_directions]
 
         elif self.encoder == 'tpr_transformers':
-            yb_rnn, aFs, aRs, R_loss = self.rnn.call(yb_masked, attention_mask)
+            yb_rnn, aFs, aRs, R_loss = self.head.call(yb_masked, attention_mask)
 
         else:
             last_yb_rnn = pooled_output
 
-        if self.pooling == 'sum':
+        if self.aggregate == 'sum':
             cls_input = torch.sum(yb_rnn, dim=1)
-        elif self.pooling == 'mean':
+        elif self.aggregate == 'mean':
             cls_input = torch.mean(yb_rnn, dim=1)
-        elif self.pooling == 'concat':
+        elif self.aggregate == 'concat':
             yb_rnn_flattened = yb_rnn.contiguous().view(batch_size, -1)
             cls_input = self.proj(yb_rnn_flattened)
         else:

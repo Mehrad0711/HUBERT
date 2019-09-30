@@ -35,7 +35,7 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 
 from arguments import define_args
-from modeling_tpr import BertForSequenceClassification_tpr
+from modules.model import BertForSequenceClassification_tpr
 from utils.data_utils import *
 from utils.evaluation import evaluate
 from utils.prediction import predict
@@ -91,13 +91,6 @@ TASK_TYPE = {
  'cola': 0,
  'copa': 0
 }
-
-
-def warmup_linear(x, warmup=0.002):
-    if x < warmup:
-        return x / warmup
-    return 1.0 - x
-
 
 def decay(value, mode, final_ratio, global_step, t_total):
     assert final_ratio <= 1.0
@@ -221,7 +214,7 @@ def main(args):
         # Prepare model
         opt = {'bidirect': args.bidirect, 'sub_word_masking': args.sub_word_masking,
                'encoder': args.encoder, 'fixed_Role': args.fixed_Role, 'scale_val': args.scale_val, 'train_scale': args.train_scale,
-               'pooling': args.pooling, 'freeze_bert': args.freeze_bert, 'num_rnn_layers': args.num_rnn_layers,
+               'aggregate': args.aggregate, 'freeze_bert': args.freeze_bert, 'num_rnn_layers': args.num_rnn_layers,
                'num_heads': args.num_heads, 'do_src_mask': args.do_src_mask, 'ortho_reg': args.ortho_reg, 'cls': args.cls}
         logger.info('*' * 50)
         logger.info('option for training: {}'.format(args))
@@ -260,16 +253,16 @@ def main(args):
             desired_keys = []
             if args.load_role:
                 logger.info('loading roles from checkpoint model')
-                desired_keys.extend(['rnn.R.weight', 'rnn.R.bias'])
+                desired_keys.extend(['head.R.weight', 'head.R.bias'])
             if args.load_filler:
                 logger.info('loading fillers from checkpoint model')
-                desired_keys.extend(['rnn.F.weight', 'rnn.F.bias'])
+                desired_keys.extend(['head.F.weight', 'head.F.bias'])
             if args.load_bert_params:
                 logger.info('loading bert params from checkpoint model')
                 desired_keys.extend([name for name in model_state_dict.keys() if name.startswith('bert')])
             if args.load_LSTM_params:
                 logger.info('loading LSTM params from checkpoint model')
-                desired_keys.extend([name for name in model_state_dict.keys() if name.startswith('rnn.rnn')])
+                desired_keys.extend([name for name in model_state_dict.keys() if name.startswith('head.rnn')])
 
             state = dict()
             for key, val in model_state_dict.items():
@@ -394,8 +387,8 @@ def main(args):
                     # modify scaling factor
                     with torch.no_grad():
                         pre = model.module if hasattr(model, 'module') else model
-                        if args.do_decay and hasattr(pre.rnn, 'scale'):
-                            pre.rnn.scale.copy_(torch.tensor(decay(pre.rnn.scale.cpu().numpy(), args.mode, args.final_ratio, global_step, t_total), dtype=pre.rnn.scale.dtype))
+                        if args.do_decay and hasattr(pre.head, 'scale'):
+                            pre.head.scale.copy_(torch.tensor(decay(pre.head.scale.cpu().numpy(), args.mode, args.final_ratio, global_step, t_total), dtype=pre.head.scale.dtype))
 
                     if args.debug:
                         pre = 'module' if hasattr(model, 'module') else ''
@@ -460,8 +453,8 @@ def main(args):
         model_state_dict = states['state_dict']
         opt = states['options']
         bert_config = states['bert_config']
-        if 'rnn.scale' in model_state_dict.keys():
-            print('scale value is:', model_state_dict['rnn.scale'])
+        if 'head.scale' in model_state_dict.keys():
+            print('scale value is:', model_state_dict['head.scale'])
         logger.info('*' * 50)
         logger.info('option for evaluation: {}'.format(args))
         logger.info('*' * 50)
@@ -514,8 +507,8 @@ def main(args):
         model_state_dict = states['state_dict']
         opt = states['options']
         bert_config = states['bert_config']
-        if 'rnn.scale' in model_state_dict.keys():
-            print('scale value is:', model_state_dict['rnn.scale'])
+        if 'head.scale' in model_state_dict.keys():
+            print('scale value is:', model_state_dict['head.scale'])
         logger.info('*' * 50)
         logger.info('option for evaluation: {}'.format(args))
         logger.info('*' * 50)
