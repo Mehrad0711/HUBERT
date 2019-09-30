@@ -1,4 +1,5 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Travis-CI](https://api.travis-ci.com/Mehrad0711/HUBERT.svg?token=bGPLh8DGc3xJsVMrFqmZ&branch=master)](https://travis-ci.com/Mehrad0711/HUBERT/)
 
 # HUBERT 
 
@@ -85,9 +86,10 @@ To use mixed-precision please install [apex](https://github.com/NVIDIA/apex) </b
 
 ### TODOs
 
-- [ ] Add Travis for code testing
+- [x] Add Travis for code testing
+- [x] Support regression tasks (e.g. STS)
 - [ ] Option for continual training
-- [ ] Support regression tasks (e.g. STS)
+
 
 ## Acknowledgments
 Our implementations are in PyTorch and based on the [HuggingFace](https://github.com/huggingface/pytorch-pretrained-BERT) and BERT’s [original codebase](https://github.com/google-research/bert).
