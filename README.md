@@ -88,7 +88,9 @@ To use mixed-precision please install [apex](https://github.com/NVIDIA/apex) </b
 
 - [x] Add Travis for code testing
 - [x] Support regression tasks (e.g. STS)
+- [x] migrate from pytorch_pretrained_bert to transformers library
 - [ ] Option for continual training
+
 
 
 ## Acknowledgments

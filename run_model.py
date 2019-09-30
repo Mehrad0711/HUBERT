@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BERT finetuning runner."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -25,10 +24,10 @@ import shutil
 
 import numpy as np
 import torch
-from pytorch_pretrained_bert.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
-from pytorch_pretrained_bert.modeling import BertModel
-from pytorch_pretrained_bert.optimization import BertAdam
-from pytorch_pretrained_bert.tokenization import BertTokenizer
+from transformers.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
+from transformers.modeling_bert import BertModel
+from transformers.optimization import AdamW, WarmupLinearSchedule
+from transformers.tokenization_bert import BertTokenizer
 from tensorboardX import SummaryWriter
 from torch.optim import SGD
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
@@ -193,7 +192,6 @@ def main(args):
 
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
 
-
     if args.do_train or args.do_eval:
 
         eval_examples = processor.get_dev_examples(args.data_dir)
@@ -327,10 +325,11 @@ def main(args):
 
         else:
             if args.optimizer == 'adam':
-                optimizer = BertAdam(optimizer_grouped_parameters,
+                optimizer = AdamW(optimizer_grouped_parameters,
                                      lr=args.learning_rate,
-                                     warmup=args.warmup_proportion,
-                                     t_total=t_total)
+                                     correct_bias=False)
+                scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_proportion * t_total, t_total=t_total)
+
             elif args.optimizer == 'radam':
                 optimizer = RAdam(optimizer_grouped_parameters,
                                      lr=args.learning_rate)
@@ -339,7 +338,7 @@ def main(args):
                                      lr=args.learning_rate)
 
         global_step = 0
-        best_eval_accuracy = 0.0
+        best_eval_accuracy = -float('inf')
 
         train_features = convert_examples_to_features(
         train_examples, label_list, args.max_seq_length, tokenizer)
@@ -404,7 +403,12 @@ def main(args):
                         cls_w = dict(model.named_parameters())[pre + 'classifier.weight'].clone()
                         cls_b = dict(model.named_parameters())[pre + 'classifier.bias'].clone()
 
-                    optimizer.step()
+                    if args.optimizer == 'adam':
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                        optimizer.step()
+                        scheduler.step()
+                    else:
+                        optimizer.step()
 
                     if args.debug:
                         new_cls_w = dict(model.named_parameters())[pre + 'classifier.weight'].clone()

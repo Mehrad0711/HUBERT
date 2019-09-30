@@ -106,6 +106,10 @@ def define_args():
                         type=int,
                         default=1,
                         help="Number of updates steps to accumulate before performing a backward/update pass.")
+    parser.add_argument('--max_grad_norm',
+                        type=float,
+                        default=1.0,
+                        help="clipping grad norms at this value")
     parser.add_argument('--fp16',
                         type=str2bool,
                         default=False,
