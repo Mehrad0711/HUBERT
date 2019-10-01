@@ -70,6 +70,8 @@ class TPRencoder_lstm(nn.Module):
         for a in encoder_args.keys():
             setattr(self, a, encoder_args[a])
 
+        self.out_dim = self.dSymbols * self.dRoles
+
         super(TPRencoder_lstm, self).__init__()
         assert self.rnn_type == 'LSTM' or self.rnn_type == 'GRU'
         if self.rnn_type == 'LSTM':
@@ -92,7 +94,7 @@ class TPRencoder_lstm(nn.Module):
         print('self.scale requires grad is: {}'.format(self.scale.requires_grad))
 
         self.ndirections = 1 + int(self.bidirect)
-        self.F = ScaleLinear(self.nSymbols, self.Symbols, scale_val=self.scale_val)
+        self.F = ScaleLinear(self.nSymbols, self.dSymbols, scale_val=self.scale_val)
 
         if self.fixed_Role:
             self.R = nn.Parameter(torch.eye(self.nRoles), requires_grad=False)
