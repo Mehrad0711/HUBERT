@@ -98,7 +98,7 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
         else:
             self.classifier = nn.Linear(768, num_labels)
 
-        if hasattr(self, 'rnn'):
+        if hasattr(self, 'head'):
             print('num_elems:', sum([p.nelement() for p in self.head.parameters() if p.requires_grad]))
 
         self.apply(self._init_weights)
