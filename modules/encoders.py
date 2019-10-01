@@ -253,7 +253,7 @@ class TPRencoder_transformers(nn.Module):
         src_mask = None
         src_key_pad_mask = None
         if self.do_src_mask:
-            src_key_pad_mask = src_key_padding_mask
+            src_key_pad_mask = src_key_padding_mask.type(torch.ByteTensor)
 
         aF = self.enc_aF(x.transpose(0, 1), src_mask=src_mask, src_key_padding_mask=src_key_pad_mask)
         aR = self.enc_aR(x.transpose(0, 1), src_mask=src_mask, src_key_padding_mask=src_key_pad_mask)
@@ -273,8 +273,7 @@ class TPRencoder_transformers(nn.Module):
 
         return final_T, aF.transpose(0, 1), aR.transpose(0, 1)
 
-
-    def call(self, x , src_key_padding_mask=None):
+    def call(self, x, src_key_padding_mask=None):
 
         R_flat = self.R.weight.view(self.R.weight.shape[0], -1)
         R_loss_mat = torch.norm(torch.mm(R_flat, R_flat.t()) - torch.eye(R_flat.shape[0], dtype=R_flat.dtype, device=R_flat.device)).pow(2) +\

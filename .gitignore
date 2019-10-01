@@ -14,7 +14,8 @@ Pipfile*
 results
 trained_models
 hubert-tests*
-
+run.sh
+yamls
 
 # Distribution / packaging
 .Python

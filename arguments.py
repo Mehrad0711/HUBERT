@@ -149,7 +149,7 @@ def define_args():
                         help="whether to use a bidirectional encoder")
     parser.add_argument("--encoder",
                         type=str,
-                        default='tpr',
+                        default='tpr_transformers',
                         choices=['no_enc', 'lstm', 'tpr_lstm', 'tpr_transformers'],
                         help="which encoder to use")
     parser.add_argument("--load_ckpt",
