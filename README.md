@@ -57,7 +57,7 @@ Mehrad Moradshahi, Hamid Palangi, Monica S. Lam, Paul Smolensky, Jianfeng Gao<br
 	```bash
 	python3 run_model.py --task_name MNLI --data_dir ./data/MNLI/ --bert_model bert-base-uncased --do_train True --dSymbols 30 --dRoles 30 --nSymbols 50 --nRoles 35 --num_train_epochs 10 --output_dir ./$trained_models/MNLI 
 	```
-youou should get ~84% accuracy on MNLI matched dev set.
+you should get ~84% accuracy on MNLI matched dev set.
 
 2. Second, load the fine-tuned model and initialize a second (only pre-trained) HUBERT model with the desired subset of paprameters from the former model. Then train, evalaute and test the model on the target task. For example when your target task is QQP and you only want to load roles:</br>
 	```bash
