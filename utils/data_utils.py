@@ -785,7 +785,6 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         assert len(segment_ids) == max_seq_length
         assert len(sub_word_masks) == max_seq_length
 
-
         if label_map:
             if example.label:
                 label_id = label_map[example.label]

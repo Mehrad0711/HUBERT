@@ -36,12 +36,7 @@ def define_args():
                         type=str,
                         required=False,
                         help="The output directory where the model predictions and checkpoints will be written.")
-    # parser.add_argument("--log_dir",
-    #                     # default=os.path.join(os.getenv("PHILLY_LOG_DIRECTORY", ""), 'tensorboard'),
-    #                     default=os.path.join(os.getenv("PT_OUTPUT_DIR", ""), 'results'),
-    #                     type=str,
-    #                     required=False,
-    #                     help="The output directory where the model predictions and checkpoints will be written.")
+
     ## Other parameters
     parser.add_argument("--cont_task_names",
                         default=[],

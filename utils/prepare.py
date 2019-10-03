@@ -37,7 +37,7 @@ def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer,
     all_sub_word_masks = torch.tensor([f.sub_word_masks for f in features], dtype=torch.long)
 
     if split == 'test':
-        if args.task_name.lower() == 'snli':
+        if task.lower() == 'snli':
             all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.long)
             data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_sub_word_masks, all_label_ids)
         else:
@@ -64,6 +64,7 @@ def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer,
         return dataloader, all_guids
     else:
         return dataloader
+
 
 def prepare_optim(args, num_train_steps, param_optimizer):
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
@@ -108,6 +109,7 @@ def prepare_optim(args, num_train_steps, param_optimizer):
 
     return optimizer, scheduler, t_total
 
+
 def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=None):
 
     # Load config and pre-trained model
@@ -119,10 +121,6 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
     model = BertForSequenceClassification_tpr(bert_config,
                                               num_labels=num_labels,
                                               task_type=task_type,
-                                              nSymbols=args.nSymbols,
-                                              nRoles=args.nRoles,
-                                              dSymbols=args.dSymbols,
-                                              dRoles=args.dRoles,
                                               temperature=args.temperature,
                                               max_seq_len=args.max_seq_length,
                                               **opt)

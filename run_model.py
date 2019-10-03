@@ -21,6 +21,8 @@ from __future__ import print_function
 
 import random
 import shutil
+import logging
+import os
 
 import numpy as np
 import torch
@@ -31,64 +33,11 @@ from tensorboardX import SummaryWriter
 from tqdm import tqdm, trange
 
 from arguments import define_args
+from utils.tasks import PROCESSORS, NUM_LABELS_TASK, TASK_TYPE
 from modules.model import BertForSequenceClassification_tpr
-from utils.data_utils import *
 from utils.evaluation import evaluate
 from utils.prediction import predict
 from utils.prepare import prepare_data_loader, prepare_model, prepare_optim
-
-
-PROCESSORS = {
-    'dnc_acc': ACCProcessor,
-    'dnc_nli': NLIProcessor,
-    'hans': HANSProcessor,
-    'mnli': MNLIProcessor,
-    'snli': SNLIProcessor,
-    'qqp': QQPProcessor,
-    'qnli': QNLIProcessor,
-    'wnli': WNLIProcessor,
-    'rte': RTEProcessor,
-    'mrpc': MRPCProcessor,
-    'sst': SSTProcessor,
-    'sts': STSProcessor,
-    'cola': COLAProcessor,
-    'copa': COPAProcessor
-}
-
-NUM_LABELS_TASK = {
- 'dnc_acc': 2,
- 'dnc_nli': 3,
- 'hans': 3, # 3-way prediction followed by combining contradiction and neutral into one
- 'mnli': 3,
- 'snli': 3,
- 'qqp': 2,
- 'qnli': 2,
- 'wnli': 2,
- 'rte': 2,
- 'mrpc': 2,
- 'sst': 2,
- 'sts': 1,
- 'cola': 2,
- 'copa': 2
-}
-
-# 0 for classification and 1 for regression
-TASK_TYPE = {
- 'dnc_acc': 0,
- 'dnc_nli': 0,
- 'hans': 0,
- 'mnli': 0,
- 'snli': 0,
- 'qqp': 0,
- 'qnli': 0,
- 'wnli': 0,
- 'rte': 0,
- 'mrpc': 0,
- 'sst': 0,
- 'sts': 1,
- 'cola': 0,
- 'copa': 0
-}
 
 
 def decay(value, mode, final_ratio, global_step, t_total):
@@ -107,19 +56,12 @@ def decay(value, mode, final_ratio, global_step, t_total):
 def main(args):
     args.log_dir = args.output_dir #TODO
 
-    if os.path.exists(args.output_dir) and args.do_train:
+    if os.path.exists(args.output_dir):
         if args.delete_ok:
             shutil.rmtree(args.output_dir)
         else:
             raise ValueError("Output directory ({}) already exists and is not empty.".format(args.output_dir))
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    if os.path.exists(args.log_dir) and args.do_train:
-        if args.delete_ok:
-            shutil.rmtree(args.log_dir)
-        else:
-            raise ValueError("Logging directory ({}) already exists and is not empty.".format(args.log_dir))
-    os.makedirs(args.log_dir, exist_ok=True)
+    os.makedirs(args.output_dir, exist_ok=False)
 
     # create logger
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
@@ -165,17 +107,6 @@ def main(args):
 
     if not any([args.do_train, args.do_eval, args.do_test]):
         raise ValueError("At least one of `do_train` or `do_eval` or 'do_test' must be True.")
-    task_name = args.task_name.lower()
-
-    if task_name not in PROCESSORS:
-        raise ValueError("Task not found: %s" % (task_name))
-
-    processor = PROCESSORS[task_name](args.num_ex)
-    num_labels = NUM_LABELS_TASK[task_name]
-    task_type = TASK_TYPE[task_name]
-    label_list = None
-    if task_type != 1:
-        label_list = processor.get_labels()
 
     if 'uncased' in args.bert_model and not args.do_lower_case:
         logger.warning('do_lower_case should be True if uncased bert models are used')
@@ -184,9 +115,6 @@ def main(args):
 
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
 
-    if args.do_train or args.do_eval:
-        eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, task_name, tokenizer, split='dev')
-
     all_tasks = [args.task_name] + args.cont_task_names
 
     if args.do_train:
@@ -194,6 +122,15 @@ def main(args):
         loading_path = args.load_ckpt
 
         for i, task in enumerate(all_tasks):
+            if task.lower() not in PROCESSORS:
+                raise ValueError("Task not found: %s" % (task.lower()))
+
+            processor = PROCESSORS[task.lower()](args.num_ex)
+            num_labels = NUM_LABELS_TASK[task.lower()]
+            task_type = TASK_TYPE[task.lower()]
+            label_list = None
+            if task_type != 1:
+                label_list = processor.get_labels()
 
             # make output_dir
             os.makedirs(os.path.join(args.output_dir, task), exist_ok=False)
@@ -205,11 +142,16 @@ def main(args):
             num_train_steps = int(
                 len(train_examples) / args.train_batch_size / args.gradient_accumulation_steps * args.num_train_epochs)
 
+            if args.do_eval:
+                # prepare eval data
+                eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='dev')
+
             # Prepare model
-            opt = {'bidirect': args.bidirect, 'sub_word_masking': args.sub_word_masking,
-                   'encoder': args.encoder, 'fixed_Role': args.fixed_Role, 'scale_val': args.scale_val, 'train_scale': args.train_scale,
-                   'aggregate': args.aggregate, 'freeze_bert': args.freeze_bert, 'num_rnn_layers': args.num_rnn_layers,
-                   'num_heads': args.num_heads, 'do_src_mask': args.do_src_mask, 'ortho_reg': args.ortho_reg, 'cls': args.cls}
+            opt = {'bidirect': args.bidirect, 'sub_word_masking': args.sub_word_masking, 'nRoles': args.nRoles, 'nSymbols': args.nSymbols,
+                   'dRoles': args.dRoles, 'dSymbols': args.dSymbols, 'encoder': args.encoder, 'fixed_Role': args.fixed_Role,
+                   'scale_val': args.scale_val, 'train_scale': args.train_scale, 'aggregate': args.aggregate, 'freeze_bert': args.freeze_bert,
+                   'num_rnn_layers': args.num_rnn_layers, 'num_heads': args.num_heads, 'do_src_mask': args.do_src_mask,
+                   'ortho_reg': args.ortho_reg, 'cls': args.cls}
             logger.info('*' * 50)
             logger.info('option for training: {}'.format(args))
             logger.info('*' * 50)
@@ -316,18 +258,31 @@ def main(args):
                         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
                         output_model_file = os.path.join(*[args.output_dir, task, "pytorch_model_best.bin"])
                         loading_path = output_model_file
-                        logger.info("Saving checkpoint pytorch_model_best.bin to {}".format(args.output_dir))
+                        logger.info("Saving checkpoint pytorch_model_best.bin to {}".format(output_model_file))
                         torch.save({'state_dict': model_to_save.state_dict(), 'options': opt, 'bert_config': bert_config}, output_model_file)
 
             tensorboard_writer.close()
 
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
+
+        eval_task_name = all_tasks[-1]
+        processor = PROCESSORS[eval_task_name.lower()](args.num_ex)
+        num_labels = NUM_LABELS_TASK[eval_task_name.lower()]
+        task_type = TASK_TYPE[eval_task_name.lower()]
+        label_list = None
+        if task_type != 1:
+            label_list = processor.get_labels()
+
         # Load a trained model for evaluation
         if args.do_train:
             output_model_file = os.path.join(*[args.output_dir, all_tasks[-1], 'pytorch_model_best.bin'])
         else:
             output_model_file = os.path.join(args.load_ckpt)
+
+        #prepare data
+        eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer, split='dev')
+
         states = torch.load(output_model_file, map_location=device)
         model_state_dict = states['state_dict']
         opt = states['options']
@@ -342,10 +297,6 @@ def main(args):
         model = BertForSequenceClassification_tpr(bert_config,
                                                   num_labels=num_labels,
                                                   task_type=task_type,
-                                                  nSymbols=args.nSymbols,
-                                                  nRoles=args.nRoles,
-                                                  dSymbols=args.dSymbols,
-                                                  dRoles=args.dRoles,
                                                   temperature=args.temperature,
                                                   max_seq_len=args.max_seq_length,
                                                   **opt)
@@ -355,13 +306,13 @@ def main(args):
         model.eval()
         result = evaluate(args, model, eval_dataloader, device, task_type)
 
-
-        output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
+        if not os.path.exists(os.path.join(args.output_dir, eval_task_name)): os.makedirs(os.path.join(args.output_dir, eval_task_name))
+        output_eval_file = os.path.join(*[args.output_dir, eval_task_name, "eval_results.txt"])
         logger.info("***** Eval results *****")
         logger.info("  eval output file is in {}".format(output_eval_file))
         with open(output_eval_file, "w") as writer:
             writer.write('exp_{:s}_{:.3f}_{:.6f}_{:.0f}_{:.1f}_{:.0f}_{:.0f}_{:.0f}_{:.0f}\n'
-                         .format(task_name, args.temperature, args.learning_rate, args.train_batch_size,
+                         .format(eval_task_name, args.temperature, args.learning_rate, args.train_batch_size,
                                  args.num_train_epochs, args.dSymbols, args.dRoles, args.nSymbols, args.nRoles))
             for key in sorted(result.keys()):
                 logger.info("  %s = %s", key, str(result[key]))
@@ -370,9 +321,17 @@ def main(args):
 
     if args.do_test and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
 
+        test_task_name = all_tasks[-1]
+        processor = PROCESSORS[test_task_name.lower()](args.num_ex)
+        num_labels = NUM_LABELS_TASK[test_task_name.lower()]
+        task_type = TASK_TYPE[test_task_name.lower()]
+        label_list = None
+        if task_type != 1:
+            label_list = processor.get_labels()
+
         # Load a trained model for evaluation
         if args.do_train:
-            output_model_file = os.path.join(*[args.output_dir, all_tasks[-1], 'pytorch_model_best.bin'])
+            output_model_file = os.path.join(*[args.output_dir, test_task_name, 'pytorch_model_best.bin'])
         else:
             output_model_file = os.path.join(args.load_ckpt)
 
@@ -392,10 +351,6 @@ def main(args):
         model = BertForSequenceClassification_tpr(bert_config,
                                                   num_labels=num_labels,
                                                   task_type=task_type,
-                                                  nSymbols=args.nSymbols,
-                                                  nRoles=args.nRoles,
-                                                  dSymbols=args.dSymbols,
-                                                  dRoles=args.dRoles,
                                                   temperature=args.temperature,
                                                   max_seq_len=args.max_seq_length,
                                                   **opt)
@@ -404,18 +359,17 @@ def main(args):
         model.to(device)
         model.eval()
 
-
-        if task_name.startswith('dnc'):
-            test_features = defaultdict()
+        if test_task_name.startswith('dnc'):
             test_examples = processor.get_all_examples(args.data_dir)
             # prepare test data
             for k in test_examples.keys():
 
-                test_dataloader, all_guids = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='test', examples=test_examples)
+                test_dataloader, all_guids = prepare_data_loader(args, processor, label_list, task_type, test_task_name, tokenizer, split='test', examples=test_examples)
 
                 result = predict(args, model, test_dataloader, all_guids, device, task_type)
 
-                output_test_file = os.path.join(args.output_dir, "{}-test_predictions.txt".format(k))
+                if not os.path.exists(os.path.join(args.output_dir, test_task_name)): os.makedirs(os.path.join(args.output_dir, test_task_name))
+                output_test_file = os.path.join(*[args.output_dir, test_task_name, "{}-test_predictions.txt".format(k)])
                 logger.info("***** Test predictions *****")
                 logger.info("  test output file is in {}".format(output_test_file))
                 with open(output_test_file, "w") as writer:
@@ -425,24 +379,25 @@ def main(args):
 
         else:
             # prepare test data
-            test_dataloader, all_guids = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='test')
+            test_dataloader, all_guids = prepare_data_loader(args, processor, label_list, task_type, test_task_name, tokenizer, split='test')
 
             result = predict(args, model, test_dataloader, all_guids, device, task_type)
 
-            output_test_file = os.path.join(args.output_dir, "test_predictions.txt")
+            if not os.path.exists(os.path.join(args.output_dir, test_task_name)): os.makedirs(os.path.join(args.output_dir, test_task_name))
+            output_test_file = os.path.join(*[args.output_dir, test_task_name, "test_predictions.txt"])
             logger.info("***** Test predictions *****")
             logger.info("  test output file is in {}".format(output_test_file))
             with open(output_test_file, "w") as writer:
                 writer.write("index\tpredictions\n")
                 for id, pred in zip(result['input_ids'], result['predictions']):
-                    if task_name == 'hans':
+                    if test_task_name == 'hans':
                         if pred == 2: pred = 0  #consider neutral as non-entailment
                         writer.write("%s,%s\n" % (id, label_list[pred]))
                     elif task_type == 1:
                         writer.write("%s\t%s\n" % (id, pred))
                     else:
                         writer.write("%s\t%s\n" % (id, label_list[pred]))
-                if task_name == 'snli':
+                if test_task_name == 'snli':
                     writer.write("test_accuracy:\t%s\n" % (result['test_accuracy']))
 
 
