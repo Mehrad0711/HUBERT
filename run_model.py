@@ -359,7 +359,7 @@ def main(args):
         model.to(device)
         model.eval()
 
-        if test_task_name.startswith('dnc'):
+        if test_task_name.lower().startswith('dnc'):
             test_examples = processor.get_all_examples(args.data_dir)
             # prepare test data
             for k in test_examples.keys():
@@ -390,14 +390,14 @@ def main(args):
             with open(output_test_file, "w") as writer:
                 writer.write("index\tpredictions\n")
                 for id, pred in zip(result['input_ids'], result['predictions']):
-                    if test_task_name == 'hans':
+                    if test_task_name.lower() == 'hans':
                         if pred == 2: pred = 0  #consider neutral as non-entailment
                         writer.write("%s,%s\n" % (id, label_list[pred]))
                     elif task_type == 1:
                         writer.write("%s\t%s\n" % (id, pred))
                     else:
                         writer.write("%s\t%s\n" % (id, label_list[pred]))
-                if test_task_name == 'snli':
+                if test_task_name.lower() == 'snli':
                     writer.write("test_accuracy:\t%s\n" % (result['test_accuracy']))
 
 
