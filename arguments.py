@@ -21,7 +21,7 @@ def define_args():
                         default=None,
                         type=str,
                         required=False,
-                        help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
+                        help="The input data dir. should contain folders with task names having the .tsv files (or other data files) for that task.")
     parser.add_argument("--bert_model", default=None, type=str, required=True,
                         help="Bert pre-trained model selected in the list: bert-base-uncased, "
                              "bert-large-uncased, bert-base-cased, bert-large-cased, bert-base-multilingual-uncased, "
@@ -36,13 +36,13 @@ def define_args():
                         type=str,
                         required=False,
                         help="The output directory where the model predictions and checkpoints will be written.")
-    parser.add_argument("--log_dir",
-                        # default=os.path.join(os.getenv("PHILLY_LOG_DIRECTORY", ""), 'tensorboard'),
-                        default=os.path.join(os.getenv("PT_OUTPUT_DIR", ""), 'results'),
-                        type=str,
-                        required=False,
-                        help="The output directory where the model predictions and checkpoints will be written.")
+
     ## Other parameters
+    parser.add_argument("--cont_task_names",
+                        default=[],
+                        type=str,
+                        nargs='+',
+                        help="The name of the tasks to continue training on (for continual learning).")
     parser.add_argument("--max_seq_length",
                         default=128,
                         type=int,
@@ -167,6 +167,10 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help="Load bert parameters from checkpoint")
+    parser.add_argument("--load_classifier",
+                        type=str2bool,
+                        default=False,
+                        help="Load classifier parameters from checkpoint")
     parser.add_argument("--fixed_Role",
                         type=str2bool,
                         default=False,
@@ -254,10 +258,6 @@ def define_args():
                         type=str,
                         default='v1',
                         help='which classifier to use')
-    parser.add_argument("--classifier_ckpt",
-                        type=str,
-                        default='',
-                        help='model ckpt to load the classifier from')
 
 
     args = parser.parse_args()
