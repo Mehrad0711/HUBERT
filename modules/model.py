@@ -25,13 +25,15 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
     BERT model for classification (+ tpr)
     """
 
-    def __init__(self, config, nSymbols, nRoles, dSymbols, dRoles, temperature, max_seq_len, num_labels, task_type, **kwargs):
+    def __init__(self, config, num_labels, task_type, temperature, max_seq_len, **kwargs):
         super(BertForSequenceClassification_tpr, self).__init__(config)
         self.num_labels = num_labels
         self.task_type = task_type
         self.sub_word_masking = kwargs['sub_word_masking']
         self.ortho_reg = kwargs.get('ortho_reg', 0.0)
         self.bert = BertModel(config)
+
+        nRoles, nSymbols, dRoles, dSymbols = kwargs['nRoles'], kwargs['nSymbols'], kwargs['dRoles'], kwargs['dSymbols']
 
         # freeze bert layers
         if kwargs['freeze_bert']:

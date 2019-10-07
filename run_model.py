@@ -23,11 +23,13 @@ import random
 import shutil
 import logging
 import os
+import sys
 
 import numpy as np
 import torch
 
 from transformers.tokenization_bert import BertTokenizer
+from transformers.configuration_bert import PretrainedConfig
 from tensorboardX import SummaryWriter
 
 from tqdm import tqdm, trange
@@ -54,8 +56,12 @@ def decay(value, mode, final_ratio, global_step, t_total):
 
 
 def main(args):
-    args.log_dir = args.output_dir #TODO
 
+    if len(args.cont_task_names) != len(set(args.cont_task_names)):
+        logging.error('Please make sure all continual tasks are distinct')
+        sys.exit('exiting the program')
+
+    args.log_dir = args.output_dir #TODO
     if os.path.exists(args.output_dir):
         if args.delete_ok:
             shutil.rmtree(args.output_dir)
@@ -215,8 +221,7 @@ def main(args):
                         if args.optimizer == 'adam':
                             torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                             optimizer.step()
-                            if args.optimizer == 'adam':
-                                scheduler.step()
+                            scheduler.step()
                         else:
                             optimizer.step()
 
@@ -338,7 +343,18 @@ def main(args):
         states = torch.load(output_model_file, map_location=device)
         model_state_dict = states['state_dict']
         opt = states['options']
+
+        # compatibility with previous checkpoints
+        if 'nRoles' not in opt:
+            print(args.nRoles)
+            for val in ['nRoles', 'nSymbols', 'dRoles', 'dSymbols']:
+                opt[val] = getattr(args, val)
         bert_config = states['bert_config']
+        if not isinstance(bert_config, PretrainedConfig):
+            bert_dict = bert_config.to_dict()
+            bert_dict['layer_norm_eps'] = 1e-12
+            bert_config = PretrainedConfig.from_dict(bert_dict)
+
         if 'head.scale' in model_state_dict.keys():
             print('scale value is:', model_state_dict['head.scale'])
         logger.info('*' * 50)
@@ -347,7 +363,6 @@ def main(args):
 
         # also print it for philly debugging
         print('option for evaluation: {}'.format(args))
-
         model = BertForSequenceClassification_tpr(bert_config,
                                                   num_labels=num_labels,
                                                   task_type=task_type,

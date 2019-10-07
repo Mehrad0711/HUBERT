@@ -120,19 +120,19 @@ def define_args():
                              "0 (default value): dynamic loss scaling.\n"
                              "Positive power of 2: static loss scaling value.\n")
     parser.add_argument("--nSymbols",
-                        default=100,
+                        default=50,
                         type=int,
                         help="# of symbols")
     parser.add_argument("--nRoles",
-                        default=20,
+                        default=35,
                         type=int,
                         help="# of roles")
     parser.add_argument("--dSymbols",
-                        default=12,
+                        default=30,
                         type=int,
                         help="embedding size of symbols")
     parser.add_argument("--dRoles",
-                        default=10,
+                        default=30,
                         type=int,
                         help="embedding size of roles")
     parser.add_argument("--temperature",

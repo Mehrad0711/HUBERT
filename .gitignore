@@ -16,6 +16,7 @@ trained_models
 hubert-tests*
 run.sh
 yamls
+predictions/
 
 # Distribution / packaging
 .Python
