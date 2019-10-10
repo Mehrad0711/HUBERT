@@ -29,7 +29,6 @@ import numpy as np
 import torch
 
 from transformers.tokenization_bert import BertTokenizer
-from transformers.configuration_bert import PretrainedConfig
 from tensorboardX import SummaryWriter
 
 from tqdm import tqdm, trange
@@ -345,15 +344,8 @@ def main(args):
         opt = states['options']
 
         # compatibility with previous checkpoints
-        if 'nRoles' not in opt:
-            print(args.nRoles)
-            for val in ['nRoles', 'nSymbols', 'dRoles', 'dSymbols']:
-                opt[val] = getattr(args, val)
-        bert_config = states['bert_config']
-        if not isinstance(bert_config, PretrainedConfig):
-            bert_dict = bert_config.to_dict()
-            bert_dict['layer_norm_eps'] = 1e-12
-            bert_config = PretrainedConfig.from_dict(bert_dict)
+
+
 
         if 'head.scale' in model_state_dict.keys():
             print('scale value is:', model_state_dict['head.scale'])

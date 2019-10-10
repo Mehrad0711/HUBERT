@@ -247,6 +247,10 @@ class TPRencoder_transformers(nn.Module):
     def get_dtype(self):
         return next(self.parameters()).dtype
 
+    def get_device(self):
+        return next(self.parameters()).device
+
+
     def forward(self, x, src_key_padding_mask=None):
         # x: [batch, sequence, in_dim]
         batch = x.size(0)
@@ -255,7 +259,8 @@ class TPRencoder_transformers(nn.Module):
         src_mask = None
         src_key_pad_mask = None
         if self.do_src_mask:
-            src_key_pad_mask = src_key_padding_mask.type(torch.ByteTensor)
+            # src_key_pad_mask = src_key_padding_mask.type(torch.ByteTensor).to(self.get_device())
+            src_key_pad_mask = src_key_padding_mask
 
         aF = self.enc_aF(x.transpose(0, 1), src_mask=src_mask, src_key_padding_mask=src_key_pad_mask)
         aR = self.enc_aR(x.transpose(0, 1), src_mask=src_mask, src_key_padding_mask=src_key_pad_mask)
@@ -278,8 +283,8 @@ class TPRencoder_transformers(nn.Module):
     def call(self, x, src_key_padding_mask=None):
 
         R_flat = self.R.weight.view(self.R.weight.shape[0], -1)
-        R_loss_mat = torch.norm(torch.mm(R_flat, R_flat.t()) - torch.eye(R_flat.shape[0], dtype=R_flat.dtype, device=R_flat.device)).pow(2) +\
-                     torch.norm(torch.mm(R_flat.t(), R_flat) - torch.eye(R_flat.shape[1], dtype=R_flat.dtype, device=R_flat.device)).pow(2)
+        R_loss_mat = torch.norm(torch.mm(R_flat, R_flat.t()) - torch.eye(R_flat.shape[0], dtype=self.get_dtype(), device=self.get_device())).pow(2) +\
+                     torch.norm(torch.mm(R_flat.t(), R_flat) - torch.eye(R_flat.shape[1], dtype=self.get_dtype(), device=self.get_device())).pow(2)
         R_loss = torch.norm(R_loss_mat)
 
         out, aFs, aRs = self.forward(x, src_key_padding_mask)

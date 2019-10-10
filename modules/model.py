@@ -124,32 +124,38 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
         batch_size = input_ids.size(0)
         R_loss = None
 
-        yb, pooled_output = self.bert(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
+        sequence_output, pooled_output = self.bert(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
 
-        final_mask = attention_mask.unsqueeze(2).type(yb.type())
-        yb_masked = yb * final_mask
+        final_mask = attention_mask.unsqueeze(2)
+        sequence_output_masked = sequence_output * final_mask
+
+        # import pdb;pdb.set_trace()
+
         if self.encoder == 'lstm':
-            yb_rnn, last_yb_rnn = self.head.call(yb_masked)
+            output, last_output = self.head.call(sequence_output_masked)
 
         elif self.encoder == 'tpr_lstm':
-            yb_rnn, (last_yb_rnn, aFs, aRs), R_loss = self.head.call(
-                yb_masked)  # aFs/ aRs: [batch, seq_len, nSymbols, num_directions]
+            # aFs/ aRs: [batch, seq_len, nSymbols, num_directions]
+            output, (last_output, aFs, aRs), R_loss = self.head.call(sequence_output_masked)
 
         elif self.encoder == 'tpr_transformers':
-            yb_rnn, aFs, aRs, R_loss = self.head.call(yb_masked, attention_mask)
+            output, aFs, aRs, R_loss = self.head.call(sequence_output_masked, attention_mask)
 
         else:
-            last_yb_rnn = pooled_output
+            output = sequence_output_masked
 
         if self.aggregate == 'sum':
-            cls_input = torch.sum(yb_rnn, dim=1)
+            cls_input = torch.sum(output, dim=1)
+
         elif self.aggregate == 'mean':
-            cls_input = torch.mean(yb_rnn, dim=1)
+            cls_input = torch.mean(output, dim=1)
+
         elif self.aggregate == 'concat':
-            yb_rnn_flattened = yb_rnn.contiguous().view(batch_size, -1)
-            cls_input = self.proj(yb_rnn_flattened)
+            output_flattened = output.contiguous().view(batch_size, -1)
+            cls_input = self.proj(output_flattened)
+
         else:
-            cls_input = last_yb_rnn
+            cls_input = sequence_output[0]
 
         logits = self.classifier(cls_input)
 

@@ -32,9 +32,9 @@ def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer,
     batch_size = args.train_batch_size if split == 'train' else args.eval_batch_size
     logger.info("  Batch size = %d", batch_size)
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-    all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
+    all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.bool)
     all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
-    all_sub_word_masks = torch.tensor([f.sub_word_masks for f in features], dtype=torch.long)
+    all_sub_word_masks = torch.tensor([f.sub_word_masks for f in features], dtype=torch.bool)
 
     if split == 'test':
         if task.lower() == 'snli':

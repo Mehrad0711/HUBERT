@@ -17,6 +17,8 @@ hubert-tests*
 run.sh
 yamls
 predictions/
+scripts/
+pytorch_model_*
 
 # Distribution / packaging
 .Python
