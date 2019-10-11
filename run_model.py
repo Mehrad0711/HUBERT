@@ -30,6 +30,7 @@ import torch
 
 from transformers.tokenization_bert import BertTokenizer
 from tensorboardX import SummaryWriter
+from transformers.configuration_bert import PretrainedConfig
 
 from tqdm import tqdm, trange
 
@@ -39,6 +40,9 @@ from modules.model import BertForSequenceClassification_tpr
 from utils.evaluation import evaluate
 from utils.prediction import predict
 from utils.prepare import prepare_data_loader, prepare_model, prepare_optim
+
+import warnings
+warnings.simplefilter("ignore", UserWarning)
 
 
 def decay(value, mode, final_ratio, global_step, t_total):
@@ -290,7 +294,17 @@ def main(args):
         states = torch.load(output_model_file, map_location=device)
         model_state_dict = states['state_dict']
         opt = states['options']
+        if 'nRoles' not in opt:
+            print(args.nRoles)
+            for val in ['nRoles', 'nSymbols', 'dRoles', 'dSymbols']:
+                opt[val] = getattr(args, val)
         bert_config = states['bert_config']
+
+        if not isinstance(bert_config, PretrainedConfig):
+            bert_dict = bert_config.to_dict()
+            bert_dict['layer_norm_eps'] = 1e-12
+            bert_config = PretrainedConfig.from_dict(bert_dict)
+
         if 'head.scale' in model_state_dict.keys():
             print('scale value is:', model_state_dict['head.scale'])
         logger.info('*' * 50)
@@ -305,7 +319,7 @@ def main(args):
                                                   max_seq_len=args.max_seq_length,
                                                   **opt)
 
-        model.load_state_dict(model_state_dict)
+        model.load_state_dict(model_state_dict, strict=True)
         model.to(device)
         model.eval()
         result = evaluate(args, model, eval_dataloader, device, task_type)
@@ -342,7 +356,16 @@ def main(args):
         states = torch.load(output_model_file, map_location=device)
         model_state_dict = states['state_dict']
         opt = states['options']
+        if 'nRoles' not in opt:
+            print(args.nRoles)
+            for val in ['nRoles', 'nSymbols', 'dRoles', 'dSymbols']:
+                opt[val] = getattr(args, val)
         bert_config = states['bert_config']
+
+        if not isinstance(bert_config, PretrainedConfig):
+            bert_dict = bert_config.to_dict()
+            bert_dict['layer_norm_eps'] = 1e-12
+            bert_config = PretrainedConfig.from_dict(bert_dict)
 
         if 'head.scale' in model_state_dict.keys():
             print('scale value is:', model_state_dict['head.scale'])
@@ -359,7 +382,7 @@ def main(args):
                                                   max_seq_len=args.max_seq_length,
                                                   **opt)
 
-        model.load_state_dict(model_state_dict)
+        model.load_state_dict(model_state_dict, strict=True)
         model.to(device)
         model.eval()
 
