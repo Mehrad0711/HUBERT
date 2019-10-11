@@ -174,6 +174,10 @@ class MultiheadAttention(Module):
             attn_output_weights += attn_mask
 
         if key_padding_mask is not None:
+            if 'cpu' in str(query.device):
+                key_padding_mask = key_padding_mask.type(torch.uint8).to(query.device)
+            else:
+                key_padding_mask = key_padding_mask.type(torch.bool).to(query.device)
             attn_output_weights = attn_output_weights.view(bsz, self.num_heads, tgt_len, src_len)
             attn_output_weights = attn_output_weights.masked_fill(
                 key_padding_mask.unsqueeze(1).unsqueeze(2),

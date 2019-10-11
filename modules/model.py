@@ -126,7 +126,7 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
 
         sequence_output, pooled_output = self.bert(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
 
-        final_mask = attention_mask.unsqueeze(2)
+        final_mask = attention_mask.unsqueeze(2).type(sequence_output.type())
         sequence_output_masked = sequence_output * final_mask
 
         # import pdb;pdb.set_trace()
@@ -155,7 +155,7 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
             cls_input = self.proj(output_flattened)
 
         else:
-            cls_input = sequence_output[0]
+            cls_input = last_output if 'lstm' in self.encoder else output[:, 0]
 
         logits = self.classifier(cls_input)
 

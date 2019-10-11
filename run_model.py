@@ -342,10 +342,7 @@ def main(args):
         states = torch.load(output_model_file, map_location=device)
         model_state_dict = states['state_dict']
         opt = states['options']
-
-        # compatibility with previous checkpoints
-
-
+        bert_config = states['bert_config']
 
         if 'head.scale' in model_state_dict.keys():
             print('scale value is:', model_state_dict['head.scale'])
