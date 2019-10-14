@@ -60,10 +60,6 @@ def decay(value, mode, final_ratio, global_step, t_total):
 
 def main(args):
 
-    if len(args.cont_task_names) != len(set(args.cont_task_names)):
-        logging.error('Please make sure all continual tasks are distinct')
-        sys.exit('exiting the program')
-
     args.log_dir = args.output_dir #TODO
     if os.path.exists(args.output_dir):
         if args.delete_ok:
@@ -81,6 +77,10 @@ def main(args):
     fh = logging.FileHandler(log_file, mode='w')
     fh.setLevel(logging.DEBUG)
     logger.addHandler(fh)
+
+    if len(args.cont_task_names) != len(set(args.cont_task_names)):
+        logger.error('Please make sure all continual tasks are distinct')
+        sys.exit('exiting the program')
 
     logger.info('** output_dir is {} **'.format(args.output_dir))
 
@@ -131,8 +131,10 @@ def main(args):
         loading_path = args.load_ckpt
 
         for i, task in enumerate(all_tasks):
+
             if task.lower() not in PROCESSORS:
                 raise ValueError("Task not found: %s" % (task.lower()))
+            logger.info('*** Start training for {} ***'.format(task))
 
             processor = PROCESSORS[task.lower()](args.num_ex)
             num_labels = NUM_LABELS_TASK[task.lower()]
@@ -176,6 +178,7 @@ def main(args):
 
             global_step = 0
             best_eval_accuracy = -float('inf')
+            best_model = None
 
             train_dataloader = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='train')
 
@@ -202,7 +205,6 @@ def main(args):
                             for name, value in model.named_parameters():
                                 if value.requires_grad and value.grad is not None:
                                     print('{}: {}'.format(name, (torch.max(abs(value.grad)), torch.mean(abs(value.grad)), torch.min(abs(value.grad)))))
-
 
                     tr_loss += loss.item()
                     nb_tr_examples += input_ids.size(0)
@@ -249,6 +251,7 @@ def main(args):
                     logger.info("Saving checkpoint pytorch_model_{}.bin to {}".format(epoch, output_model_file))
                     torch.save({'state_dict': model_to_save.state_dict(), 'options': opt, 'bert_config': bert_config}, output_model_file)
 
+
                 if args.do_eval:
                     # evaluate model after every epoch
                     model.eval()
@@ -262,6 +265,7 @@ def main(args):
 
                     if result['eval_accuracy'] >= best_eval_accuracy:
                         best_eval_accuracy = result['eval_accuracy']
+                        best_model = model
                         # Save the best model
                         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
                         output_model_file = os.path.join(*[args.output_dir, task, "pytorch_model_best.bin"])
@@ -269,12 +273,43 @@ def main(args):
                         logger.info("Saving checkpoint pytorch_model_best.bin to {}".format(output_model_file))
                         torch.save({'state_dict': model_to_save.state_dict(), 'options': opt, 'bert_config': bert_config}, output_model_file)
 
+
+            if args.do_prev_eval:
+                if best_model is None:
+                    best_model = model
+                # evaluate new model on all previous tasks
+                best_model.eval()
+                for j in range(i):
+                    dev_task = all_tasks[j]
+                    # load previous task best-model classifier
+                    prev_model = torch.load(os.path.join(*[args.output_dir, dev_task, "pytorch_model_best.bin"]))
+                    with torch.no_grad():
+                        best_model.classifier.weight.set_(prev_model['state_dict']['classifier.weight'])
+                        best_model.classifier.bias.set_(prev_model['state_dict']['classifier.bias'])
+
+                    processor = PROCESSORS[dev_task.lower()](args.num_ex)
+                    num_labels = NUM_LABELS_TASK[dev_task.lower()]
+                    task_type = TASK_TYPE[dev_task.lower()]
+                    label_list = None
+                    if task_type != 1:
+                        label_list = processor.get_labels()
+                    best_model.num_labels = num_labels
+                    best_model.task_type = task_type
+                    eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, dev_task, tokenizer, split='dev')
+
+                    result = evaluate(args, best_model, eval_dataloader, device, task_type)
+                    logger.info("train_task: {}, eval_task: {}".format(task, dev_task))
+                    for key in sorted(result.keys()):
+                        logger.info("  %s = %s", key, str(result[key]))
+
+
             tensorboard_writer.close()
 
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
 
         eval_task_name = all_tasks[-1]
+        logger.info('*** Start evaluating for {} ***'.format(eval_task_name))
         processor = PROCESSORS[eval_task_name.lower()](args.num_ex)
         num_labels = NUM_LABELS_TASK[eval_task_name.lower()]
         task_type = TASK_TYPE[eval_task_name.lower()]
@@ -340,6 +375,7 @@ def main(args):
     if args.do_test and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
 
         test_task_name = all_tasks[-1]
+        logger.info('*** Start testing for {} ***'.format(test_task_name))
         processor = PROCESSORS[test_task_name.lower()](args.num_ex)
         num_labels = NUM_LABELS_TASK[test_task_name.lower()]
         task_type = TASK_TYPE[test_task_name.lower()]
