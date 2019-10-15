@@ -126,6 +126,9 @@ def main(args):
 
     all_tasks = [args.task_name] + args.cont_task_names
 
+    # check for NAN values and end experiment promptly
+    torch.autograd.set_detect_anomaly(True)
+
     if args.do_train:
 
         loading_path = args.load_ckpt

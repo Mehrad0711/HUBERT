@@ -258,9 +258,9 @@ class TPRencoder_transformers(nn.Module):
 
         src_mask = None
         src_key_pad_mask = None
-        if self.do_src_mask:
-            # src_key_pad_mask = src_key_padding_mask.type(torch.ByteTensor).to(self.get_device())
-            src_key_pad_mask = src_key_padding_mask
+        # if self.do_src_mask:
+        #     # src_key_pad_mask = src_key_padding_mask.type(torch.ByteTensor).to(self.get_device())
+        #     src_key_pad_mask = src_key_padding_mask
 
         aF = self.enc_aF(x.transpose(0, 1), src_mask=src_mask, src_key_padding_mask=src_key_pad_mask)
         aR = self.enc_aR(x.transpose(0, 1), src_mask=src_mask, src_key_padding_mask=src_key_pad_mask)
