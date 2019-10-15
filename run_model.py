@@ -126,6 +126,9 @@ def main(args):
 
     all_tasks = [args.task_name] + args.cont_task_names
 
+    # check for NAN values and end experiment promptly
+    torch.autograd.set_detect_anomaly(True)
+
     if args.do_train:
 
         loading_path = args.load_ckpt
@@ -279,13 +282,14 @@ def main(args):
                     best_model = model
                 # evaluate new model on all previous tasks
                 best_model.eval()
+                pre = best_model.module if hasattr(best_model, 'module') else best_model
                 for j in range(i):
                     dev_task = all_tasks[j]
                     # load previous task best-model classifier
                     prev_model = torch.load(os.path.join(*[args.output_dir, dev_task, "pytorch_model_best.bin"]))
                     with torch.no_grad():
-                        best_model.classifier.weight.set_(prev_model['state_dict']['classifier.weight'])
-                        best_model.classifier.bias.set_(prev_model['state_dict']['classifier.bias'])
+                        pre.classifier.weight.set_(prev_model['state_dict']['classifier.weight'])
+                        pre.classifier.bias.set_(prev_model['state_dict']['classifier.bias'])
 
                     processor = PROCESSORS[dev_task.lower()](args.num_ex)
                     num_labels = NUM_LABELS_TASK[dev_task.lower()]

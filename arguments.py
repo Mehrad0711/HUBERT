@@ -212,7 +212,7 @@ def define_args():
                         help='debug mode')
     parser.add_argument("--scale_val",
                         type=float,
-                        default=1000.0,
+                        default=1.0,
                         help='initial value of scale factor')
     parser.add_argument("--train_scale",
                         type=str2bool,
