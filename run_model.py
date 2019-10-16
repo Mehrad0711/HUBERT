@@ -192,7 +192,7 @@ def main(args):
                 for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                     batch = tuple(t.to(device) for t in batch)
                     input_ids, input_mask, segment_ids, sub_word_masks, label_ids = batch
-                    loss = model(input_ids, segment_ids, input_mask, sub_word_masks, label_ids)
+                    _, loss = model(input_ids, segment_ids, input_mask, sub_word_masks, label_ids)
                     if n_gpu > 1:
                         loss = loss.mean()  # mean() to average on multi-gpu.
                     if args.gradient_accumulation_steps > 1:
@@ -297,8 +297,8 @@ def main(args):
                     label_list = None
                     if task_type != 1:
                         label_list = processor.get_labels()
-                    best_model.num_labels = num_labels
-                    best_model.task_type = task_type
+                    pre.num_labels = num_labels
+                    pre.task_type = task_type
                     eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, dev_task, tokenizer, split='dev')
 
                     result = evaluate(args, best_model, eval_dataloader, device, task_type)
