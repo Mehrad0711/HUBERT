@@ -159,16 +159,16 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
             cls_input = last_output if 'lstm' in self.encoder else output[:, 0]
 
         logits = self.classifier(cls_input)
+        total_loss = None
 
         if labels is not None:
             if self.task_type == 0:
                 loss_fct = nn.CrossEntropyLoss()
                 loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-                return loss + self.ortho_reg * R_loss if R_loss is not None else loss
+                total_loss = loss + self.ortho_reg * R_loss if R_loss is not None else loss
             else:
                 loss_fct = nn.MSELoss()
                 loss = loss_fct(logits.view(-1, 1), labels.view(-1, 1))
-                return loss + self.ortho_reg * R_loss if R_loss is not None else loss
+                total_loss = loss + self.ortho_reg * R_loss if R_loss is not None else loss
 
-        else:
-            return logits
+        return logits, total_loss

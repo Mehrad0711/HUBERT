@@ -22,8 +22,7 @@ def evaluate(args, model, eval_dataloader, device, task_type, global_step=None, 
         label_ids = label_ids.to(device)
 
         with torch.no_grad():
-            tmp_eval_loss = model(input_ids, segment_ids, input_mask, sub_word_masks, label_ids)
-            logits = model(input_ids, segment_ids, input_mask, sub_word_masks)
+            logits, tmp_eval_loss = model(input_ids, segment_ids, input_mask, sub_word_masks, label_ids)
 
         logits = logits.detach().cpu().numpy()
         label_ids = label_ids.to('cpu').numpy()

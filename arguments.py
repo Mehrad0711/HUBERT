@@ -38,11 +38,25 @@ def define_args():
                         help="The output directory where the model predictions and checkpoints will be written.")
 
     ## Other parameters
+    parser.add_argument("--do_prev_eval",
+                        type=str2bool,
+                        default=False,
+                        help="Whether to eval on previous tasks when doing continual learning")
     parser.add_argument("--cont_task_names",
                         default=[],
                         type=str,
                         nargs='+',
                         help="The name of the tasks to continue training on (for continual learning).")
+    parser.add_argument("--eval_task_names",
+                        default=[],
+                        type=str,
+                        nargs='+',
+                        help="Task to evaluate your models on")
+    parser.add_argument("--test_task_names",
+                        default=[],
+                        type=str,
+                        nargs='+',
+                        help="Task to test your models on")
     parser.add_argument("--max_seq_length",
                         default=128,
                         type=int,
@@ -198,7 +212,7 @@ def define_args():
                         help='debug mode')
     parser.add_argument("--scale_val",
                         type=float,
-                        default=1000.0,
+                        default=1.0,
                         help='initial value of scale factor')
     parser.add_argument("--train_scale",
                         type=str2bool,
