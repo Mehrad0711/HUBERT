@@ -121,6 +121,7 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
             p.requires_grad = False
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, sub_word_masks=None, labels=None):
+
         batch_size = input_ids.size(0)
         R_loss = None
 

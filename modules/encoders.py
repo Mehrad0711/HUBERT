@@ -231,7 +231,10 @@ class TPRencoder_transformers(nn.Module):
         for a in encoder_args.keys():
             setattr(self, a, encoder_args[a])
 
-        self.enc_aF = TransformerEncoderLayer(self.in_dim, self.num_heads, self.num_hid, self.dropout)
+        self.enc_aF = TransformerEncoderLayer(self.in_dim, self.num_
+                                              
+                                         
+                                              s, self.num_hid, self.dropout)
         self.enc_aR = TransformerEncoderLayer(self.in_dim, self.num_heads, self.num_hid, self.dropout)
         self.F = nn.Linear(self.nSymbols, self.dSymbols)
 
@@ -288,4 +291,3 @@ class TPRencoder_transformers(nn.Module):
 
         out, aFs, aRs = self.forward(x, src_key_padding_mask)
         return out, aFs, aRs, R_loss
-
