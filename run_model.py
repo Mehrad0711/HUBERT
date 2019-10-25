@@ -363,7 +363,8 @@ def main(args):
         model.eval()
         result = evaluate(args, model, eval_dataloader, device, task_type)
 
-        if not os.path.exists(os.path.join(args.output_dir, eval_task_name)): os.makedirs(os.path.join(args.output_dir, eval_task_name))
+        if not os.path.exists(os.path.join(args.output_dir, eval_task_name)):
+            os.makedirs(os.path.join(args.output_dir, eval_task_name))
         output_eval_file = os.path.join(*[args.output_dir, eval_task_name, "eval_results.txt"])
         logger.info("***** Eval results *****")
         logger.info("  eval output file is in {}".format(output_eval_file))

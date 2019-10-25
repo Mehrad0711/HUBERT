@@ -185,6 +185,10 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help="Load classifier parameters from checkpoint")
+    parser.add_argument("--load_LSTM_params",
+                        type=str2bool,
+                        default=False,
+                        help='load LSTM weight and biases')
     parser.add_argument("--fixed_Role",
                         type=str2bool,
                         default=False,
@@ -193,6 +197,26 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help='whether to delete the result directory if it already exists')
+    parser.add_argument("--freeze_role",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
+    parser.add_argument("--freeze_filler",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
+    parser.add_argument("--freeze_bert_params",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
+    parser.add_argument("--freeze_classifier",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
+    parser.add_argument("--freeze_LSTM_params",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
     parser.add_argument("--freeze_mat",
                         type=str2bool,
                         default=False,
@@ -256,10 +280,6 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help='decay scale values')
-    parser.add_argument("--load_LSTM_params",
-                        type=str2bool,
-                        default=False,
-                        help='load LSTM weight and biases')
     parser.add_argument("--save_best_only",
                         type=str2bool,
                         default=True,

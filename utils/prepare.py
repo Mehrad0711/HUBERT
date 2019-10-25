@@ -158,11 +158,27 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
             if key in desired_keys:
                 state[key] = val
         model.load_state_dict(state, strict=False)
-        if args.freeze_mat:
-            logger.info('freezing all params loaded from ckpt model')
-            for name, param in model.named_parameters():
-                if name in desired_keys:
-                    param.requires_grad = False
+
+        frozen_keys = []
+        if args.freeze_role:
+            logger.info('freezing roles if loaded from ckpt model')
+            frozen_keys.extend(['head.R.weight', 'head.R.bias'])
+        if args.freeze_filler:
+            logger.info('freezing fillers if loaded from ckpt model')
+            frozen_keys.extend(['head.F.weight', 'head.F.bias'])
+        if args.freeze_bert_params:
+            logger.info('freezing bert params if loaded from ckpt model')
+            frozen_keys.extend([name for name in model_state_dict.keys() if name.startswith('bert')])
+        if args.freeze_classifier:
+            logger.info('freezing classifier params if loaded from ckpt model')
+            frozen_keys.extend([name for name in model_state_dict.keys() if name.startswith('classifier')])
+        if args.freeze_LSTM_params:
+            logger.info('freezing LSTM params if loaded from ckpt model')
+            frozen_keys.extend([name for name in model_state_dict.keys() if name.startswith('head.rnn')])
+
+        for name, param in model.named_parameters():
+            if name in frozen_keys:
+                param.requires_grad = False
 
     if args.fp16:
         model.half()
