@@ -7,7 +7,7 @@ This repository contains the code implementation for HUBERT, as described in:
 
 _HUBERT Untangles BERT to Improve Transfer across NLP Tasks_<br/>
 Mehrad Moradshahi, Hamid Palangi, Monica S. Lam, Paul Smolensky, Jianfeng Gao<br/>
-[Link](https://arxiv.org/...) 
+[Link](https://arxiv.org/abs/1910.12647) 
 
 ## Quickstart
 
@@ -68,7 +68,7 @@ you should get ~84% accuracy on MNLI matched dev set.
 
 3. To evaluate your models on HANS, first run this command to generate the predictions:</br>
 	```bash
-	python3 run_model.py --no_cuda True --task_name HANS --data_dir ./data/ --bert_model bert-base-uncased --do_test True --load_ckpt ./final_results/QQP/pytorch_model_best.bin --eval_batch_size 512 --output_dir ./predictions/
+	python3 run_model.py --task_name HANS --data_dir ./data/ --bert_model bert-base-uncased --do_test True --load_ckpt ./final_results/QQP/pytorch_model_best.bin --eval_batch_size 512 --output_dir ./predictions/
 	```
 	and then this command to produce the results broken down into different categories:</br>
 
@@ -108,7 +108,13 @@ Our implementations are in PyTorch and based on the [HuggingFace](https://github
 If you use this in your work, please cite HUBERT:
 
 ```
-@inproceedings{,
-    title = "HUBERT Untangles BERT to Improve Transfer across NLP Tasks",
+@article{Moradshahi2019Oct,
+	author = {Moradshahi, Mehrad and Palangi, Hamid and Lam, Monica S. and Smolensky, Paul and Gao, Jianfeng},
+	title = {HUBERT Untangles BERT to Improve Transfer across NLP Tasks},
+	journal = {arXiv},
+	year = {2019},
+	month = {Oct},
+	eprint = {1910.12647},
+	url = {https://arxiv.org/abs/1910.12647}
 }
 ```
