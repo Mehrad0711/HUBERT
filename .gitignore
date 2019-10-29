@@ -18,6 +18,7 @@ run.sh
 yamls
 predictions/
 scripts/
+workdir/
 pytorch_model_*
 
 # Distribution / packaging

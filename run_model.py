@@ -280,8 +280,16 @@ def main(args):
             if args.do_prev_eval:
                 if best_model is None:
                     best_model = model
-                # evaluate new model on all previous tasks
                 best_model.eval()
+
+                # evaluate best model on current task
+                dev_task = task
+                result = evaluate(args, best_model, eval_dataloader, device, task_type)
+                logger.info("train_task: {}, eval_task: {}".format(task, dev_task))
+                for key in sorted(result.keys()):
+                    logger.info("  %s = %s", key, str(result[key]))
+
+                # evaluate new model on all previous tasks
                 pre = best_model.module if hasattr(best_model, 'module') else best_model
                 for j in range(i):
                     dev_task = all_tasks[j]
