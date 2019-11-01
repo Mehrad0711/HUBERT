@@ -16,11 +16,13 @@
 
 import torch
 import torch.nn as nn
-from transformers.modeling_bert import BertPreTrainedModel, BertModel
+from transformers.modeling_utils import PreTrainedModel
+from transformers.modeling_bert import BertModel
+from transformers.modeling_roberta import RobertaModel
 from modules.encoders import RNNencoder, TPRencoder_lstm, TPRencoder_transformers
 
 
-class BertForSequenceClassification_tpr(BertPreTrainedModel):
+class BertForSequenceClassification_tpr(PreTrainedModel):
     """
     BERT model for classification (+ tpr)
     """
@@ -31,7 +33,12 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
         self.task_type = task_type
         self.sub_word_masking = kwargs['sub_word_masking']
         self.ortho_reg = kwargs.get('ortho_reg', 0.0)
-        self.bert = BertModel(config)
+
+        if kwargs['model_type'] == 'BERT':
+            self.bert = BertModel(config)
+
+        elif kwargs['model_type'] == 'RoBERTa':
+            self.bert = RobertaModel(config)
 
         nRoles, nSymbols, dRoles, dSymbols = kwargs['nRoles'], kwargs['nSymbols'], kwargs['dRoles'], kwargs['dSymbols']
 
@@ -101,6 +108,18 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
             self.classifier = nn.Linear(768, num_labels)
 
         self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        """ Initialize the weights """
+        if isinstance(module, (nn.Linear, nn.Embedding)):
+            # Slightly different from the TF version which uses truncated_normal for initialization
+            # cf https://github.com/pytorch/pytorch/pull/5617
+            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+        elif isinstance(module, torch.nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+        if isinstance(module, nn.Linear) and module.bias is not None:
+            module.bias.data.zero_()
 
     def nbert_layer(self):
         return len(self.bert.encoder.layer)

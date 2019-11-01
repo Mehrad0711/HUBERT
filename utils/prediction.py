@@ -23,6 +23,8 @@ def predict(args, model, test_dataloader, all_guids, device, task_type):
         input_mask = input_mask.to(device)
         segment_ids = segment_ids.to(device)
         sub_word_masks = sub_word_masks.to(device)
+        if args.model_type != 'DistilBERT':
+            segment_ids = segment_ids if args.model_type in ['BERT', 'XLNet'] else None  # XLM, DistilBERT and RoBERTa don't use segment_ids
 
         if args.task_name.lower() == 'snli':
             label_ids = data[4]

@@ -279,7 +279,8 @@ class HANSProcessor(DataProcessor):
 class MNLIProcessor(DataProcessor):
     """Processor for the MNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex):
+    def __init__(self, num_ex, model_type):
+        self.model_type = model_type
         super(MNLIProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
@@ -300,7 +301,12 @@ class MNLIProcessor(DataProcessor):
 
     def get_labels(self):
         """See base class."""
-        return ["contradiction", "entailment", "neutral"]
+        if self.model_type == 'RoBERTa':
+            # HACK(label indices are swapped in RoBERTa pretrained model)
+            return ["contradiction", "entailment", "neutral"]
+        else:
+            return ["contradiction", "neutral", "entailment"]
+
 
     def _create_examples(self, lines, set_type):
         """Creates examples for the training and dev sets."""
@@ -715,7 +721,7 @@ class COPAProcessor(DataProcessor):
         return examples
 
 
-def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer):
+def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer, pad_on_left, pad_token, pad_token_segment_id, mask_padding_with_zero=True):
     """Loads a data file into a list of `InputBatch`s."""
 
     label_map = None
@@ -724,66 +730,41 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
 
     features = []
     for (ex_index, example) in enumerate(examples):
-        tokens_a = tokenizer.tokenize(example.text_a)
 
-        tokens_b = None
-        if example.text_b:
-            tokens_b = tokenizer.tokenize(example.text_b)
-            # Modifies `tokens_a` and `tokens_b` in place so that the total
-            # length is less than the specified length.
-            # Account for [CLS], [SEP], [SEP] with "- 3"
-            _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
-        else:
-            # Account for [CLS] and [SEP] with "- 2"
-            if len(tokens_a) > max_seq_length - 2:
-                tokens_a = tokens_a[:(max_seq_length - 2)]
+        inputs = tokenizer.encode_plus(
+            example.text_a,
+            example.text_b,
+            add_special_tokens=True,
+            max_length=max_seq_length,
+            truncate_first_sequence=True
+        )
 
-        # The convention in BERT is:
-        # (a) For sequence pairs:
-        #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
-        #  type_ids: 0   0  0    0    0     0       0 0    1  1  1  1   1 1
-        # (b) For single sequences:
-        #  tokens:   [CLS] the dog is hairy . [SEP]
-        #  type_ids: 0   0   0   0  0     0 0
-        #
-        # Where "type_ids" are used to indicate whether this is the first
-        # sequence or the second sequence. The embedding vectors for `type=0` and
-        # `type=1` were learned during pre-training and are added to the wordpiece
-        # embedding vector (and position vector). This is not *strictly* necessary
-        # since the [SEP] token unambigiously separates the sequences, but it makes
-        # it easier for the model to learn the concept of sequences.
-        #
-        # For classification tasks, the first vector (corresponding to [CLS]) is
-        # used as as the "sentence vector". Note that this only makes sense because
-        # the entire model is fine-tuned.
-        tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
-        segment_ids = [0] * len(tokens)
-
-        if tokens_b:
-            tokens += tokens_b + ["[SEP]"]
-            segment_ids += [1] * (len(tokens_b) + 1)
+        input_ids, segment_ids = inputs["input_ids"], inputs["token_type_ids"]
 
         # mask to keep track of the beginning of each sub-word piece
-        sub_word_masks = [0 if t.startswith('##') else 1 for t in tokens]
-
-        input_ids = tokenizer.convert_tokens_to_ids(tokens)
+        # sub_word_masks = [0 if t.startswith('##') else 1 for t in tokens]
+        sub_word_masks = [1] * max_seq_length
 
         # The mask has 1 for real tokens and 0 for padding tokens. Only real
         # tokens are attended to.
-        input_mask = [1] * len(input_ids)
+        input_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
 
         # Zero-pad up to the sequence length.
-        zero_padding = [0] * (max_seq_length - len(input_ids))
-        one_padding = [1] * (max_seq_length - len(input_ids))
-        input_ids += zero_padding
-        input_mask += zero_padding
-        segment_ids += zero_padding
-        sub_word_masks += one_padding
+        padding_length = max_seq_length - len(input_ids)
+        if pad_on_left:
+            input_ids = ([pad_token] * padding_length) + input_ids
+            input_mask = ([0 if mask_padding_with_zero else 1] * padding_length) + input_mask
+            segment_ids = ([pad_token_segment_id] * padding_length) + segment_ids
+        else:
+            input_ids = input_ids + ([pad_token] * padding_length)
+            input_mask = input_mask + ([0 if mask_padding_with_zero else 1] * padding_length)
+            segment_ids = segment_ids + ([pad_token_segment_id] * padding_length)
 
-        assert len(input_ids) == max_seq_length
-        assert len(input_mask) == max_seq_length
-        assert len(segment_ids) == max_seq_length
-        assert len(sub_word_masks) == max_seq_length
+        assert len(input_ids) == max_seq_length, "Error with input length {} vs {}".format(len(input_ids), max_seq_length)
+        assert len(input_mask) == max_seq_length, "Error with input length {} vs {}".format(len(input_mask), max_seq_length)
+        assert len(segment_ids) == max_seq_length, "Error with input length {} vs {}".format(len(segment_ids), max_seq_length)
+        assert len(sub_word_masks) == max_seq_length, "Error with input length {} vs {}".format(len(sub_word_masks), max_seq_length)
+
 
         if label_map:
             if example.label:
@@ -801,12 +782,10 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         if ex_index < 5:
             logger.info("*** Example ***")
             logger.info("guid: %s" % (example.guid))
-            logger.info("tokens: %s" % " ".join(
-                [str(x) for x in tokens]))
+            logger.info("example: %s" % example)
             logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
             logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-            logger.info(
-                "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
+            logger.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
             if example.label is not None:
                 logger.info("label: %s (id = %d)" % (example.label, label_id))
 

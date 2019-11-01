@@ -22,7 +22,7 @@ def define_args():
                         type=str,
                         required=False,
                         help="The input data dir. should contain folders with task names having the .tsv files (or other data files) for that task.")
-    parser.add_argument("--bert_model", default=None, type=str, required=True,
+    parser.add_argument("--pretrained_model_name", default=None, type=str, required=True,
                         help="Bert pre-trained model selected in the list: bert-base-uncased, "
                              "bert-large-uncased, bert-base-cased, bert-large-cased, bert-base-multilingual-uncased, "
                              "bert-base-multilingual-cased, bert-base-chinese.")
@@ -36,6 +36,14 @@ def define_args():
                         type=str,
                         required=False,
                         help="The output directory where the model predictions and checkpoints will be written.")
+
+    ## Model
+    parser.add_argument("--model_type",
+                        type=str,
+                        required=True,
+                        choices=['BERT', 'RoBERTa', 'XLNet'],
+                        help="The output directory where the model predictions and checkpoints will be written.")
+
 
     ## Other parameters
     parser.add_argument("--do_prev_eval",

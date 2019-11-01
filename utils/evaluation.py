@@ -20,6 +20,8 @@ def evaluate(args, model, eval_dataloader, device, task_type, global_step=None, 
         segment_ids = segment_ids.to(device)
         sub_word_masks = sub_word_masks.to(device)
         label_ids = label_ids.to(device)
+        if args.model_type != 'DistilBERT':
+            segment_ids = segment_ids if args.model_type in ['BERT', 'XLNet'] else None  # XLM, DistilBERT and RoBERTa don't use segment_ids
 
         with torch.no_grad():
             logits, tmp_eval_loss = model(input_ids, segment_ids, input_mask, sub_word_masks, label_ids)

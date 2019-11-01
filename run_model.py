@@ -29,8 +29,10 @@ import numpy as np
 import torch
 
 from transformers.tokenization_bert import BertTokenizer
+from transformers.tokenization_roberta import RobertaTokenizer
 from tensorboardX import SummaryWriter
 from transformers.configuration_bert import PretrainedConfig
+from transformers.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 
 from tqdm import tqdm, trange
 
@@ -117,12 +119,15 @@ def main(args):
     if not any([args.do_train, args.do_eval, args.do_test]):
         raise ValueError("At least one of `do_train` or `do_eval` or 'do_test' must be True.")
 
-    if 'uncased' in args.bert_model and not args.do_lower_case:
+    if 'uncased' in args.pretrained_model_name and not args.do_lower_case:
         logger.warning('do_lower_case should be True if uncased bert models are used')
         logger.warning('changing do_lower_case from False to True')
         setattr(args, 'do_lower_case', True)
 
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+    if args.model_type == 'BERT':
+        tokenizer = BertTokenizer.from_pretrained(args.pretrained_model_name, do_lower_case=args.do_lower_case, cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / args.model_type / 'tokenizer')
+    elif args.model_type == 'RoBERTa':
+        tokenizer = RobertaTokenizer.from_pretrained(args.pretrained_model_name, do_lower_case=args.do_lower_case, cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / args.model_type / 'tokenizer')
 
     all_tasks = [args.task_name] + args.cont_task_names
 
@@ -165,7 +170,7 @@ def main(args):
                    'dRoles': args.dRoles, 'dSymbols': args.dSymbols, 'encoder': args.encoder, 'fixed_Role': args.fixed_Role,
                    'scale_val': args.scale_val, 'train_scale': args.train_scale, 'aggregate': args.aggregate, 'freeze_bert': args.freeze_bert,
                    'num_rnn_layers': args.num_rnn_layers, 'num_heads': args.num_heads, 'do_src_mask': args.do_src_mask,
-                   'ortho_reg': args.ortho_reg, 'cls': args.cls}
+                   'ortho_reg': args.ortho_reg, 'cls': args.cls, 'model_type':args.model_type, 'pretrained_model_name': args.pretrained_model_name}
             logger.info('*' * 50)
             logger.info('option for training: {}'.format(args))
             logger.info('*' * 50)
@@ -192,7 +197,9 @@ def main(args):
                 for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                     batch = tuple(t.to(device) for t in batch)
                     input_ids, input_mask, segment_ids, sub_word_masks, label_ids = batch
-                    _, loss = model(input_ids, segment_ids, input_mask, sub_word_masks, label_ids)
+                    if args.model_type != 'DistilBERT':
+                        segment_ids = segment_ids if args.model_type in ['BERT', 'XLNet'] else None  # XLM, DistilBERT and RoBERTa don't use segment_ids
+                    _, loss = model(input_ids, token_type_ids=segment_ids, attention_mask=input_mask, sub_word_masks=sub_word_masks, labels=label_ids)
                     if n_gpu > 1:
                         loss = loss.mean()  # mean() to average on multi-gpu.
                     if args.gradient_accumulation_steps > 1:

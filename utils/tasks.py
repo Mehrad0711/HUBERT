@@ -1,10 +1,13 @@
 from utils.data_utils import *
+from arguments import define_args
+
+args = define_args()
 
 PROCESSORS = {
     'dnc_acc': ACCProcessor,
     'dnc_nli': NLIProcessor,
     'hans': HANSProcessor,
-    'mnli': MNLIProcessor,
+    'mnli': lambda num_ex: MNLIProcessor(num_ex, args.model_type),
     'snli': SNLIProcessor,
     'qqp': QQPProcessor,
     'qnli': QNLIProcessor,

@@ -8,6 +8,7 @@ from modules.model import BertForSequenceClassification_tpr
 from utils.data_utils import *
 from transformers.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from transformers.modeling_bert import BertModel
+from transformers.modeling_roberta import RobertaModel
 from transformers.optimization import AdamW, WarmupLinearSchedule
 from torch.optim import SGD
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
@@ -26,7 +27,14 @@ def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer,
         if split == 'test':
             examples = processor.get_test_examples(data_dir)
 
-    features = convert_examples_to_features(examples, label_list, args.max_seq_length, tokenizer)
+    features = convert_examples_to_features(examples,
+                                            label_list,
+                                            args.max_seq_length,
+                                            tokenizer,
+                                            pad_on_left=bool(args.model_type in ['XLNet']),
+                                            pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
+                                            pad_token_segment_id=4 if args.model_type in ['XLNet'] else 0)
+
     logger.info("***** preparing data *****")
     logger.info("  Num examples = %d", len(examples))
     batch_size = args.train_batch_size if split == 'train' else args.eval_batch_size
@@ -113,17 +121,28 @@ def prepare_optim(args, num_train_steps, param_optimizer):
 def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=None):
 
     # Load config and pre-trained model
-    pre_trained_model = BertModel.from_pretrained(args.bert_model, cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / 'distributed_{}'.format(args.local_rank))
-    bert_config = pre_trained_model.config
-
-    # modify config
-    bert_config.num_hidden_layers = args.num_bert_layers
-    model = BertForSequenceClassification_tpr(bert_config,
-                                              num_labels=num_labels,
-                                              task_type=task_type,
-                                              temperature=args.temperature,
-                                              max_seq_len=args.max_seq_length,
-                                              **opt)
+    if args.model_type == 'BERT':
+        pre_trained_model = BertModel.from_pretrained(args.pretrained_model_name, cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / args.model_type / 'distributed_{}'.format(args.local_rank))
+        bert_config = pre_trained_model.config
+        # modify config
+        bert_config.num_hidden_layers = args.num_bert_layers
+        model = BertForSequenceClassification_tpr(bert_config,
+                                                  num_labels=num_labels,
+                                                  task_type=task_type,
+                                                  temperature=args.temperature,
+                                                  max_seq_len=args.max_seq_length,
+                                                  **opt)
+    elif args.model_type == 'RoBERTa':
+        pre_trained_model = RobertaModel.from_pretrained(args.pretrained_model_name, cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / args.model_type / 'distributed_{}'.format(args.local_rank))
+        bert_config = pre_trained_model.config
+        # modify config
+        bert_config.num_hidden_layers = args.num_bert_layers
+        model = BertForSequenceClassification_tpr(bert_config,
+                                                  num_labels=num_labels,
+                                                  task_type=task_type,
+                                                  temperature=args.temperature,
+                                                  max_seq_len=args.max_seq_length,
+                                                  **opt)
 
     # load desired layers from config
     model.bert.load_state_dict(pre_trained_model.state_dict(), strict=False)
