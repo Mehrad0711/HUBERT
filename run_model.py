@@ -298,6 +298,12 @@ def main(args):
                     with torch.no_grad():
                         pre.classifier.weight.set_(prev_model['state_dict']['classifier.weight'])
                         pre.classifier.bias.set_(prev_model['state_dict']['classifier.bias'])
+                        if args.replace_filler:
+                            pre.head.F.weight.set_(prev_model['state_dict']['head.F.weight'])
+                            pre.head.F.bias.set_(prev_model['state_dict']['head.F.bias'])
+                        if args.replace_role:
+                            pre.head.R.weight.set_(prev_model['state_dict']['head.R.weight'])
+                            pre.head.R.bias.set_(prev_model['state_dict']['head.R.bias'])
 
                     processor = PROCESSORS[dev_task.lower()](args.num_ex)
                     num_labels = NUM_LABELS_TASK[dev_task.lower()]

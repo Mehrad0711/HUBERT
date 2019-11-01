@@ -292,6 +292,16 @@ def define_args():
                         type=str,
                         default='v1',
                         help='which classifier to use')
+    parser.add_argument("--replace_filler",
+                        type=str2bool,
+                        default=False,
+                        help='when evaluating a model on previous task (in continual learning settings),'
+                             ' replace filler weights with previous values')
+    parser.add_argument("--replace_role",
+                        type=str2bool,
+                        default=False,
+                        help='when evaluating a model on previous task (in continual learning settings),'
+                             ' replace role weights with previous values')
 
 
     args = parser.parse_args()
