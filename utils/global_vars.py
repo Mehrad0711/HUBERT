@@ -1,16 +1,10 @@
 from utils.data_utils import *
-from transformers import (WEIGHTS_NAME, BertConfig,
-                                  BertModel, BertTokenizer,
-                                  RobertaConfig,
-                                  RobertaModel,
-                                  RobertaTokenizer,
-                                  XLMConfig, XLMModel,
-                                  XLMTokenizer, XLNetConfig,
-                                  XLNetModel,
-                                  XLNetTokenizer,
-                                  DistilBertConfig,
-                                  DistilBertModel,
-                                  DistilBertTokenizer)
+from transformers import (BertConfig, BertModel, BertTokenizer,
+                          RobertaConfig, RobertaModel, RobertaTokenizer,
+                          XLMConfig, XLMModel, XLMTokenizer,
+                          XLNetConfig, XLNetModel, XLNetTokenizer,
+                          DistilBertConfig, DistilBertModel, DistilBertTokenizer,
+                          )
 
 
 MODEL_CLASSES = {
@@ -18,11 +12,11 @@ MODEL_CLASSES = {
     'XLNet': (XLNetConfig, XLNetModel, XLNetTokenizer),
     'XLM': (XLMConfig, XLMModel, XLMTokenizer),
     'RoBERTa': (RobertaConfig, RobertaModel, RobertaTokenizer),
-    'DistilBert': (DistilBertConfig, DistilBertModel, DistilBertTokenizer)
+    'DistilBert': (DistilBertConfig, DistilBertModel, DistilBertTokenizer),
 }
 
 ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys()) for conf in (BertConfig, XLNetConfig, XLMConfig,
-                                                                                RobertaConfig, DistilBertConfig)), ())
+                                                                                RobertaConfig, DistilBertConfig,)), ())
 
 from arguments import define_args
 args = define_args()

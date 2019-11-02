@@ -3,7 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import torch
-from utils.tasks import MODEL_CLASSES
+from utils.global_vars import MODEL_CLASSES
 
 from modules.model import HUTransformer
 from utils.data_utils import *

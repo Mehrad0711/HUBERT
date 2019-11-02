@@ -28,15 +28,14 @@ import sys
 import numpy as np
 import torch
 
-from utils.tasks import MODEL_CLASSES
 from tensorboardX import SummaryWriter
 from transformers.configuration_utils import PretrainedConfig
 from transformers.file_utils import PYTORCH_TRANSFORMERS_CACHE
 
 from tqdm import tqdm, trange
 
+from utils.global_vars import PROCESSORS, NUM_LABELS_TASK, TASK_TYPE, MODEL_CLASSES
 from arguments import define_args
-from utils.tasks import PROCESSORS, NUM_LABELS_TASK, TASK_TYPE
 from modules.model import HUTransformer
 from utils.evaluation import evaluate
 from utils.prediction import predict

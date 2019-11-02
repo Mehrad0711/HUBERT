@@ -1,6 +1,6 @@
 import argparse
 import os
-from utils.tasks import MODEL_CLASSES, ALL_MODELS
+from utils.global_vars import MODEL_CLASSES, ALL_MODELS
 
 
 def str2bool(v):

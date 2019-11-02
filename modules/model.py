@@ -76,7 +76,7 @@ class HUTransformer(PreTrainedModel):
         if self.aggregate == 'concat':
             self.proj = nn.Linear(max_seq_len * hidden_dimension, hidden_dimension)
 
-        # define the encoder and aggregation layer
+        # define the encoder
         if self.encoder == 'lstm':
             encoder_args = {'in_dim': hidden_size, 'num_hid': hidden_size, 'nlayers': self.num_layers,
                             'dropout': 0.0, 'bidirect': kwargs['bidirect'], 'rnn_type': 'LSTM'}
@@ -97,9 +97,6 @@ class HUTransformer(PreTrainedModel):
                     'fixed_Role': kwargs['fixed_Role'], 'train_scale': kwargs['train_scale'],
                     'scale_val': kwargs['scale_val'], 'do_src_mask': kwargs['do_src_mask']}
             self.head = TPRencoder_transformers(encoder_args)
-
-        else:
-            self.classifier = nn.Linear(768, num_labels)
 
         self.apply(self._init_weights)
 
