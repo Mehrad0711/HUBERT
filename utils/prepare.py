@@ -3,12 +3,11 @@ from __future__ import division
 from __future__ import print_function
 
 import torch
+from utils.tasks import MODEL_CLASSES
 
-from modules.model import BertForSequenceClassification_tpr
+from modules.model import HUTransformer
 from utils.data_utils import *
-from transformers.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
-from transformers.modeling_bert import BertModel
-from transformers.modeling_roberta import RobertaModel
+from transformers.file_utils import PYTORCH_TRANSFORMERS_CACHE
 from transformers.optimization import AdamW, WarmupLinearSchedule
 from torch.optim import SGD
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
@@ -120,32 +119,30 @@ def prepare_optim(args, num_train_steps, param_optimizer):
 
 def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=None):
 
-    # Load config and pre-trained model
-    if args.model_type == 'BERT':
-        pre_trained_model = BertModel.from_pretrained(args.pretrained_model_name, cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / args.model_type / 'distributed_{}'.format(args.local_rank))
-        bert_config = pre_trained_model.config
-        # modify config
-        bert_config.num_hidden_layers = args.num_bert_layers
-        model = BertForSequenceClassification_tpr(bert_config,
-                                                  num_labels=num_labels,
-                                                  task_type=task_type,
-                                                  temperature=args.temperature,
-                                                  max_seq_len=args.max_seq_length,
-                                                  **opt)
-    elif args.model_type == 'RoBERTa':
-        pre_trained_model = RobertaModel.from_pretrained(args.pretrained_model_name, cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / args.model_type / 'distributed_{}'.format(args.local_rank))
-        bert_config = pre_trained_model.config
-        # modify config
-        bert_config.num_hidden_layers = args.num_bert_layers
-        model = BertForSequenceClassification_tpr(bert_config,
-                                                  num_labels=num_labels,
-                                                  task_type=task_type,
-                                                  temperature=args.temperature,
-                                                  max_seq_len=args.max_seq_length,
-                                                  **opt)
+    _, model_class, _ = MODEL_CLASSES[args.model_type]
+
+    pre_trained_model = model_class.from_pretrained(args.pretrained_model_name, cache_dir=PYTORCH_TRANSFORMERS_CACHE / args.model_type / 'distributed_{}'.format(args.local_rank))
+    new_config = pre_trained_model.config
+    # modify config
+    if args.model_type in ['BERT', 'RoBERTa']:
+        new_config.num_hidden_layers = args.num_transformer_layers
+    elif args.model_type in ['XLM', 'DistilBert']:
+        new_config.n_layers = args.num_transformer_layers
+    elif args.model_type in ['XLNet']:
+        new_config.n_layer = args.num_transformer_layers
+
+    transformer_model = model_class(new_config)
+
+    model = HUTransformer(new_config,
+                          transformer_model,
+                          num_labels=num_labels,
+                          task_type=task_type,
+                          temperature=args.temperature,
+                          max_seq_len=args.max_seq_length,
+                          **opt)
 
     # load desired layers from config
-    model.bert.load_state_dict(pre_trained_model.state_dict(), strict=False)
+    model.transformer.load_state_dict(pre_trained_model.state_dict(), strict=False)
 
     # initialize Symbol and Filler parameters from a checkpoint instead of randomly initializing them
     if loading_path:
@@ -162,9 +159,9 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
         if args.load_filler:
             logger.info('loading fillers from checkpoint model')
             desired_keys.extend(['head.F.weight', 'head.F.bias'])
-        if args.load_bert_params:
-            logger.info('loading bert params from checkpoint model')
-            desired_keys.extend([name for name in model_state_dict.keys() if name.startswith('bert')])
+        if args.load_transformer_params:
+            logger.info('loading transformer params from checkpoint model')
+            desired_keys.extend([name for name in model_state_dict.keys() if name.startswith('transformer')])
         if args.load_classifier:
             logger.info('loading classifier params from checkpoint model')
             desired_keys.extend([name for name in model_state_dict.keys() if name.startswith('classifier')])
@@ -185,9 +182,9 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
         if args.freeze_filler:
             logger.info('freezing fillers if loaded from ckpt model')
             frozen_keys.extend(['head.F.weight', 'head.F.bias'])
-        if args.freeze_bert_params:
-            logger.info('freezing bert params if loaded from ckpt model')
-            frozen_keys.extend([name for name in model_state_dict.keys() if name.startswith('bert')])
+        if args.freeze_transformer_params:
+            logger.info('freezing transformer params if loaded from ckpt model')
+            frozen_keys.extend([name for name in model_state_dict.keys() if name.startswith('transformer')])
         if args.freeze_classifier:
             logger.info('freezing classifier params if loaded from ckpt model')
             frozen_keys.extend([name for name in model_state_dict.keys() if name.startswith('classifier')])
@@ -213,4 +210,4 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
     elif n_gpu > 1:
         model = torch.nn.DataParallel(model)
 
-    return model, bert_config
+    return model, new_config

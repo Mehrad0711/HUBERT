@@ -736,7 +736,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             example.text_b,
             add_special_tokens=True,
             max_length=max_seq_length,
-            truncate_first_sequence=True
+            truncation_strategy='longest_first'
         )
 
         input_ids, segment_ids = inputs["input_ids"], inputs["token_type_ids"]

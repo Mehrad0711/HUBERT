@@ -1,6 +1,30 @@
 from utils.data_utils import *
-from arguments import define_args
+from transformers import (WEIGHTS_NAME, BertConfig,
+                                  BertModel, BertTokenizer,
+                                  RobertaConfig,
+                                  RobertaModel,
+                                  RobertaTokenizer,
+                                  XLMConfig, XLMModel,
+                                  XLMTokenizer, XLNetConfig,
+                                  XLNetModel,
+                                  XLNetTokenizer,
+                                  DistilBertConfig,
+                                  DistilBertModel,
+                                  DistilBertTokenizer)
 
+
+MODEL_CLASSES = {
+    'BERT': (BertConfig, BertModel, BertTokenizer),
+    'XLNet': (XLNetConfig, XLNetModel, XLNetTokenizer),
+    'XLM': (XLMConfig, XLMModel, XLMTokenizer),
+    'RoBERTa': (RobertaConfig, RobertaModel, RobertaTokenizer),
+    'DistilBert': (DistilBertConfig, DistilBertModel, DistilBertTokenizer)
+}
+
+ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys()) for conf in (BertConfig, XLNetConfig, XLMConfig,
+                                                                                RobertaConfig, DistilBertConfig)), ())
+
+from arguments import define_args
 args = define_args()
 
 PROCESSORS = {
@@ -36,6 +60,7 @@ NUM_LABELS_TASK = {
  'cola': 2,
  'copa': 2
 }
+
 
 # 0 for classification and 1 for regression
 TASK_TYPE = {

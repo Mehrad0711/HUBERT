@@ -1,5 +1,7 @@
 import argparse
 import os
+from utils.tasks import MODEL_CLASSES, ALL_MODELS
+
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -22,10 +24,13 @@ def define_args():
                         type=str,
                         required=False,
                         help="The input data dir. should contain folders with task names having the .tsv files (or other data files) for that task.")
-    parser.add_argument("--pretrained_model_name", default=None, type=str, required=True,
-                        help="Bert pre-trained model selected in the list: bert-base-uncased, "
-                             "bert-large-uncased, bert-base-cased, bert-large-cased, bert-base-multilingual-uncased, "
-                             "bert-base-multilingual-cased, bert-base-chinese.")
+
+    parser.add_argument("--pretrained_model_name",
+                        default=None,
+                        type=str,
+                        required=True,
+                        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS))
+
     parser.add_argument("--task_name",
                         default=None,
                         type=str,
@@ -41,9 +46,8 @@ def define_args():
     parser.add_argument("--model_type",
                         type=str,
                         required=True,
-                        choices=['BERT', 'RoBERTa', 'XLNet'],
-                        help="The output directory where the model predictions and checkpoints will be written.")
-
+                        choices=['BERT', 'RoBERTa', 'XLNet', 'XLM', 'DistilBert'],
+                        help="Model type selected in the list: " + ", ".join(MODEL_CLASSES.keys()))
 
     ## Other parameters
     parser.add_argument("--do_prev_eval",
@@ -185,10 +189,10 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help="Load Filler matrices from checkpoint")
-    parser.add_argument("--load_bert_params",
+    parser.add_argument("--load_transformer_params",
                         type=str2bool,
                         default=False,
-                        help="Load bert parameters from checkpoint")
+                        help="Load transformer parameters from checkpoint")
     parser.add_argument("--load_classifier",
                         type=str2bool,
                         default=False,
@@ -213,7 +217,7 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help='whether to freeze Role/ Filler matrices after loading from a trained model')
-    parser.add_argument("--freeze_bert_params",
+    parser.add_argument("--freeze_transformer_params",
                         type=str2bool,
                         default=False,
                         help='whether to freeze Role/ Filler matrices after loading from a trained model')
@@ -255,14 +259,14 @@ def define_args():
                         default='none',
                         choices=['sum', 'mean', 'concat', 'none'],
                         help='type of aggregation to perform on top of head layer')
-    parser.add_argument("--freeze_bert",
+    parser.add_argument("--freeze_transformer",
                         type=str2bool,
                         default=False,
-                        help='Freeze bert layers')
-    parser.add_argument("--num_bert_layers",
+                        help='Freeze transformer layers')
+    parser.add_argument("--num_transformer_layers",
                         type=int,
                         default=12,
-                        help='num_bert_layers to use in our model')
+                        help='num_transformer_layers to use in our model')
     parser.add_argument("--num_rnn_layers",
                         type=int,
                         default=1,

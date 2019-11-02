@@ -17,33 +17,27 @@
 import torch
 import torch.nn as nn
 from transformers.modeling_utils import PreTrainedModel
-from transformers.modeling_bert import BertModel
-from transformers.modeling_roberta import RobertaModel
 from modules.encoders import RNNencoder, TPRencoder_lstm, TPRencoder_transformers
 
 
-class BertForSequenceClassification_tpr(PreTrainedModel):
+class HUTransformer(PreTrainedModel):
     """
-    BERT model for classification (+ tpr)
+    HUTransformer model class
     """
 
-    def __init__(self, config, num_labels, task_type, temperature, max_seq_len, **kwargs):
-        super(BertForSequenceClassification_tpr, self).__init__(config)
+    def __init__(self, config, transformer_model, num_labels, task_type, temperature, max_seq_len, **kwargs):
+        super(HUTransformer, self).__init__(config)
         self.num_labels = num_labels
         self.task_type = task_type
         self.sub_word_masking = kwargs['sub_word_masking']
         self.ortho_reg = kwargs.get('ortho_reg', 0.0)
 
-        if kwargs['model_type'] == 'BERT':
-            self.bert = BertModel(config)
-
-        elif kwargs['model_type'] == 'RoBERTa':
-            self.bert = RobertaModel(config)
+        self.transformer = transformer_model
 
         nRoles, nSymbols, dRoles, dSymbols = kwargs['nRoles'], kwargs['nSymbols'], kwargs['dRoles'], kwargs['dSymbols']
 
-        # freeze bert layers
-        if kwargs['freeze_bert']:
+        # freeze transformer layers
+        if kwargs['freeze_transformer']:
             self.freeze_layers(12)
 
         # self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -114,28 +108,29 @@ class BertForSequenceClassification_tpr(PreTrainedModel):
         if isinstance(module, (nn.Linear, nn.Embedding)):
             # Slightly different from the TF version which uses truncated_normal for initialization
             # cf https://github.com/pytorch/pytorch/pull/5617
-            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            initializer_range = self.config.initializer_range if hasattr(self.config, 'initializer_range') else self.config.embed_init_std
+            module.weight.data.normal_(mean=0.0, std=initializer_range)
         elif isinstance(module, torch.nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
 
-    def nbert_layer(self):
-        return len(self.bert.encoder.layer)
+    def number_transformer_layer(self):
+        return len(self.transformer.encoder.layer)
 
     def freeze_layers(self, max_n):
-        assert max_n <= self.nbert_layer()
-        for p in self.bert.pooler.parameters():
+        assert max_n <= self.number_transformer_layer()
+        for p in self.transformer.pooler.parameters():
             p.requires_grad = False
-        for p in self.bert.embeddings.parameters():
+        for p in self.transformer.embeddings.parameters():
             p.requires_grad = False
         for i in range(0, max_n):
             self.freeze_layer(i)
 
     def freeze_layer(self, n):
-        assert n < self.nbert_layer()
-        encode_layer = self.bert.encoder.layer[n]
+        assert n < self.number_transformer_layer()
+        encode_layer = self.transformer.encoder.layer[n]
         for p in encode_layer.parameters():
             p.requires_grad = False
 
@@ -144,13 +139,17 @@ class BertForSequenceClassification_tpr(PreTrainedModel):
         batch_size = input_ids.size(0)
         R_loss = None
 
-        sequence_output, pooled_output = self.bert(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
+        inputs = {'input_ids': input_ids, 'attention_mask': attention_mask}
+        if token_type_ids is not None:
+            inputs['token_type_ids'] = token_type_ids
+        output = self.transformer(**inputs)
+
+        sequence_output = output[0]
 
         final_mask = attention_mask.unsqueeze(2).type(sequence_output.type())
         sequence_output_masked = sequence_output * final_mask
 
-        # import pdb;pdb.set_trace()
-
+        # obtain output of encoder
         if self.encoder == 'lstm':
             output, last_output = self.head.call(sequence_output_masked)
 
@@ -164,6 +163,7 @@ class BertForSequenceClassification_tpr(PreTrainedModel):
         else:
             output = sequence_output_masked
 
+        # aggregate encoder output values
         if self.aggregate == 'sum':
             cls_input = torch.sum(output, dim=1)
 
@@ -176,6 +176,7 @@ class BertForSequenceClassification_tpr(PreTrainedModel):
 
         else:
             cls_input = last_output if 'lstm' in self.encoder else output[:, 0]
+
 
         logits = self.classifier(cls_input)
         total_loss = None

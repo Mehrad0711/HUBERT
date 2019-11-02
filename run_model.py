@@ -28,17 +28,16 @@ import sys
 import numpy as np
 import torch
 
-from transformers.tokenization_bert import BertTokenizer
-from transformers.tokenization_roberta import RobertaTokenizer
+from utils.tasks import MODEL_CLASSES
 from tensorboardX import SummaryWriter
-from transformers.configuration_bert import PretrainedConfig
-from transformers.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
+from transformers.configuration_utils import PretrainedConfig
+from transformers.file_utils import PYTORCH_TRANSFORMERS_CACHE
 
 from tqdm import tqdm, trange
 
 from arguments import define_args
 from utils.tasks import PROCESSORS, NUM_LABELS_TASK, TASK_TYPE
-from modules.model import BertForSequenceClassification_tpr
+from modules.model import HUTransformer
 from utils.evaluation import evaluate
 from utils.prediction import predict
 from utils.prepare import prepare_data_loader, prepare_model, prepare_optim
@@ -120,14 +119,12 @@ def main(args):
         raise ValueError("At least one of `do_train` or `do_eval` or 'do_test' must be True.")
 
     if 'uncased' in args.pretrained_model_name and not args.do_lower_case:
-        logger.warning('do_lower_case should be True if uncased bert models are used')
+        logger.warning('do_lower_case should be True if uncased transformer models are used')
         logger.warning('changing do_lower_case from False to True')
         setattr(args, 'do_lower_case', True)
 
-    if args.model_type == 'BERT':
-        tokenizer = BertTokenizer.from_pretrained(args.pretrained_model_name, do_lower_case=args.do_lower_case, cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / args.model_type / 'tokenizer')
-    elif args.model_type == 'RoBERTa':
-        tokenizer = RobertaTokenizer.from_pretrained(args.pretrained_model_name, do_lower_case=args.do_lower_case, cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / args.model_type / 'tokenizer')
+    config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
+    tokenizer = tokenizer_class.from_pretrained(args.pretrained_model_name, do_lower_case=args.do_lower_case, cache_dir=PYTORCH_TRANSFORMERS_CACHE / args.model_type / 'tokenizer')
 
     all_tasks = [args.task_name] + args.cont_task_names
 
@@ -168,16 +165,17 @@ def main(args):
             # Prepare model
             opt = {'bidirect': args.bidirect, 'sub_word_masking': args.sub_word_masking, 'nRoles': args.nRoles, 'nSymbols': args.nSymbols,
                    'dRoles': args.dRoles, 'dSymbols': args.dSymbols, 'encoder': args.encoder, 'fixed_Role': args.fixed_Role,
-                   'scale_val': args.scale_val, 'train_scale': args.train_scale, 'aggregate': args.aggregate, 'freeze_bert': args.freeze_bert,
+                   'scale_val': args.scale_val, 'train_scale': args.train_scale, 'aggregate': args.aggregate, 'freeze_transformer': args.freeze_transformer,
                    'num_rnn_layers': args.num_rnn_layers, 'num_heads': args.num_heads, 'do_src_mask': args.do_src_mask,
-                   'ortho_reg': args.ortho_reg, 'cls': args.cls, 'model_type':args.model_type, 'pretrained_model_name': args.pretrained_model_name}
+                   'ortho_reg': args.ortho_reg, 'cls': args.cls, 'model_type': args.model_type, 'pretrained_model_name': args.pretrained_model_name}
             logger.info('*' * 50)
             logger.info('option for training: {}'.format(args))
             logger.info('*' * 50)
             # also print it for philly debugging
-            print('option for training: {}'.format(args))
+            if os.getenv("PT_OUTPUT_DIR") is not None:
+                print('option for training: {}'.format(args))
 
-            model, bert_config = prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path)
+            model, transformer_config = prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path)
 
             print('num_elems:', sum([p.nelement() for p in model.parameters() if p.requires_grad]))
 
@@ -259,7 +257,7 @@ def main(args):
                     output_model_file = os.path.join(*[args.output_dir, task, "pytorch_model_{}.bin".format(epoch)])
                     loading_path = output_model_file
                     logger.info("Saving checkpoint pytorch_model_{}.bin to {}".format(epoch, output_model_file))
-                    torch.save({'state_dict': model_to_save.state_dict(), 'options': opt, 'bert_config': bert_config}, output_model_file)
+                    torch.save({'state_dict': model_to_save.state_dict(), 'options': opt, 'transformer_config': transformer_config}, output_model_file)
 
 
                 if args.do_eval:
@@ -281,7 +279,7 @@ def main(args):
                         output_model_file = os.path.join(*[args.output_dir, task, "pytorch_model_best.bin"])
                         loading_path = output_model_file
                         logger.info("Saving checkpoint pytorch_model_best.bin to {}".format(output_model_file))
-                        torch.save({'state_dict': model_to_save.state_dict(), 'options': opt, 'bert_config': bert_config}, output_model_file)
+                        torch.save({'state_dict': model_to_save.state_dict(), 'options': opt, 'transformer_config': transformer_config}, output_model_file)
 
 
             if args.do_prev_eval:
@@ -358,12 +356,12 @@ def main(args):
             print(args.nRoles)
             for val in ['nRoles', 'nSymbols', 'dRoles', 'dSymbols']:
                 opt[val] = getattr(args, val)
-        bert_config = states['bert_config']
+        transformer_config = states['transformer_config']
 
-        if not isinstance(bert_config, PretrainedConfig):
-            bert_dict = bert_config.to_dict()
-            bert_dict['layer_norm_eps'] = 1e-12
-            bert_config = PretrainedConfig.from_dict(bert_dict)
+        if not isinstance(transformer_config, PretrainedConfig):
+            transformer_dict = transformer_config.to_dict()
+            transformer_dict['layer_norm_eps'] = 1e-12
+            transformer_config = PretrainedConfig.from_dict(transformer_dict)
 
         if 'head.scale' in model_state_dict.keys():
             print('scale value is:', model_state_dict['head.scale'])
@@ -372,12 +370,17 @@ def main(args):
         logger.info('*' * 50)
         # also print it for philly debugging
         print('option for evaluation: {}'.format(args))
-        model = BertForSequenceClassification_tpr(bert_config,
-                                                  num_labels=num_labels,
-                                                  task_type=task_type,
-                                                  temperature=args.temperature,
-                                                  max_seq_len=args.max_seq_length,
-                                                  **opt)
+
+        _, model_class, _ = MODEL_CLASSES[args.model_type]
+        transformer_model = model_class(transformer_config)
+
+        model = HUTransformer(transformer_config,
+                              transformer_model,
+                              num_labels=num_labels,
+                              task_type=task_type,
+                              temperature=args.temperature,
+                              max_seq_len=args.max_seq_length,
+                              **opt)
 
         model.load_state_dict(model_state_dict, strict=True)
         model.to(device)
@@ -422,12 +425,12 @@ def main(args):
             print(args.nRoles)
             for val in ['nRoles', 'nSymbols', 'dRoles', 'dSymbols']:
                 opt[val] = getattr(args, val)
-        bert_config = states['bert_config']
+        transformer_config = states['transformer_config']
 
-        if not isinstance(bert_config, PretrainedConfig):
-            bert_dict = bert_config.to_dict()
-            bert_dict['layer_norm_eps'] = 1e-12
-            bert_config = PretrainedConfig.from_dict(bert_dict)
+        if not isinstance(transformer_config, PretrainedConfig):
+            transformer_dict = transformer_config.to_dict()
+            transformer_dict['layer_norm_eps'] = 1e-12
+            transformer_config = PretrainedConfig.from_dict(transformer_dict)
 
         if 'head.scale' in model_state_dict.keys():
             print('scale value is:', model_state_dict['head.scale'])
@@ -437,12 +440,17 @@ def main(args):
 
         # also print it for philly debugging
         print('option for evaluation: {}'.format(args))
-        model = BertForSequenceClassification_tpr(bert_config,
-                                                  num_labels=num_labels,
-                                                  task_type=task_type,
-                                                  temperature=args.temperature,
-                                                  max_seq_len=args.max_seq_length,
-                                                  **opt)
+
+        _, model_class, _ = MODEL_CLASSES[args.model_type]
+        transformer_model = model_class(transformer_config)
+
+        model = HUTransformer(transformer_config,
+                              transformer_model,
+                              num_labels=num_labels,
+                              task_type=task_type,
+                              temperature=args.temperature,
+                              max_seq_len=args.max_seq_length,
+                              **opt)
 
         model.load_state_dict(model_state_dict, strict=True)
         model.to(device)
