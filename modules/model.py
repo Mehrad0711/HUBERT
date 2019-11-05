@@ -41,6 +41,7 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
 
         # self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.num_layers = kwargs['num_rnn_layers']
+        self.extra_layers = kwargs['num_extra_layers']
         self.num_directs = 1 + int(kwargs['bidirect'])
         self.cls = kwargs.get('cls', 'v1')
         self.encoder = kwargs['encoder']
@@ -92,7 +93,7 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
         elif self.encoder == 'tpr_transformers':
             encoder_args = {'in_dim': hidden_size, 'num_hid': hidden_size, 'num_heads': kwargs['num_heads'],
                     'nSymbols': nSymbols, 'nRoles': nRoles, 'dSymbols': dSymbols, 'dRoles': dRoles,
-                    'temperature': temperature, 'dropout': 0.0,
+                    'temperature': temperature, 'dropout': 0.0, 'extra_layers': self.extra_layers,
                     'fixed_Role': kwargs['fixed_Role'], 'train_scale': kwargs['train_scale'],
                     'scale_val': kwargs['scale_val'], 'do_src_mask': kwargs['do_src_mask']}
             self.head = TPRencoder_transformers(encoder_args)
