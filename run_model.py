@@ -90,7 +90,10 @@ def main(args):
             logger.warning('changing Role dimension from {} to {} to match number of Roles'.format(args.dRoles, args.nRoles))
             setattr(args, 'dRoles', args.nRoles)
 
-    if args.local_rank == -1 or args.no_cuda:
+    if args.no_cuda:
+        device = torch.device("cpu")
+        n_gpu = 0
+    elif args.local_rank == -1:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
         n_gpu = torch.cuda.device_count()
     else:
@@ -99,6 +102,8 @@ def main(args):
         n_gpu = 1
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.distributed.init_process_group(backend='nccl')
+    args.device = device
+    args.n_gpu = n_gpu
     logger.info("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
         device, n_gpu, bool(args.local_rank != -1), args.fp16))
 
