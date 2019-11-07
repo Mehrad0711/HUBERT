@@ -7,7 +7,7 @@ from modules.transformers import TransformerEncoderLayer
 class RNNencoder(nn.Module):
     def __init__(self, encoder_args):
         """
-        RNN encoder on the top of sequences in bert.
+        RNN encoder
         """
         super(RNNencoder, self).__init__()
 
@@ -65,7 +65,7 @@ class RNNencoder(nn.Module):
 class TPRencoder_lstm(nn.Module):
     def __init__(self, encoder_args):
         """
-        TPR encoder on the top of sequences in bert.
+        TPR-LSTM encoder
         """
         for a in encoder_args.keys():
             setattr(self, a, encoder_args[a])
@@ -224,7 +224,7 @@ class TPRencoder_lstm(nn.Module):
 class TPRencoder_transformers(nn.Module):
     def __init__(self, encoder_args):
         """
-        TPR encoder on the top of sequences in bert.
+        TPR_Transformer encoder
         """
         super(TPRencoder_transformers, self).__init__()
 

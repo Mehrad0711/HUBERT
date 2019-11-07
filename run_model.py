@@ -293,8 +293,10 @@ def main(args):
                 pre = best_model.module if hasattr(best_model, 'module') else best_model
                 for j in range(i):
                     dev_task = all_tasks[j]
-                    # load previous task best-model classifier
+
+                    # load previous task best-model classifier (and possibly other parameters)
                     prev_model = torch.load(os.path.join(*[args.output_dir, dev_task, "pytorch_model_best.bin"]))
+
                     with torch.no_grad():
                         pre.classifier.weight.set_(prev_model['state_dict']['classifier.weight'])
                         pre.classifier.bias.set_(prev_model['state_dict']['classifier.bias'])
@@ -304,6 +306,16 @@ def main(args):
                         if args.replace_role:
                             pre.head.R.weight.set_(prev_model['state_dict']['head.R.weight'])
                             pre.head.R.bias.set_(prev_model['state_dict']['head.R.bias'])
+                        if args.replace_filler_selector:
+                            pre.head.enc_aF.weight.set_(prev_model['state_dict']['head.enc_aF.weight'])
+                            pre.head.enc_aF.bias.set_(prev_model['state_dict']['head.enc_aF.bias'])
+                            pre.head.WaF.weight.set_(prev_model['state_dict']['head.WaF.weight'])
+                            pre.head.WaF.bias.set_(prev_model['state_dict']['head.WaF.bias'])
+                        if args.replace_role_selector:
+                            pre.head.enc_aR.weight.set_(prev_model['state_dict']['head.enc_aR.weight'])
+                            pre.head.enc_aR.bias.set_(prev_model['state_dict']['head.enc_aR.bias'])
+                            pre.head.WaR.weight.set_(prev_model['state_dict']['head.WaR.weight'])
+                            pre.head.WaR.bias.set_(prev_model['state_dict']['head.WaR.bias'])
 
                     processor = PROCESSORS[dev_task.lower()](args.num_ex)
                     num_labels = NUM_LABELS_TASK[dev_task.lower()]

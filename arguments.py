@@ -181,6 +181,14 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help="Load bert parameters from checkpoint")
+    parser.add_argument("--load_role_selector",
+                        type=str2bool,
+                        default=False,
+                        help="Load Role selector neural network from checkpoint")
+    parser.add_argument("--load_filler_selector",
+                        type=str2bool,
+                        default=False,
+                        help="Load Filler selector neural network from checkpoint")
     parser.add_argument("--load_classifier",
                         type=str2bool,
                         default=False,
@@ -200,11 +208,19 @@ def define_args():
     parser.add_argument("--freeze_role",
                         type=str2bool,
                         default=False,
-                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
+                        help='whether to freeze Role matrices after loading from a trained model')
     parser.add_argument("--freeze_filler",
                         type=str2bool,
                         default=False,
-                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
+                        help='whether to freeze Filler matrices after loading from a trained model')
+    parser.add_argument("--freeze_role_selector",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role networks after loading from a trained model')
+    parser.add_argument("--freeze_filler_selector",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Filler networks after loading from a trained model')
     parser.add_argument("--freeze_bert_params",
                         type=str2bool,
                         default=False,
@@ -214,10 +230,6 @@ def define_args():
                         default=False,
                         help='whether to freeze Role/ Filler matrices after loading from a trained model')
     parser.add_argument("--freeze_LSTM_params",
-                        type=str2bool,
-                        default=False,
-                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
-    parser.add_argument("--freeze_mat",
                         type=str2bool,
                         default=False,
                         help='whether to freeze Role/ Filler matrices after loading from a trained model')
@@ -302,6 +314,16 @@ def define_args():
                         default=False,
                         help='when evaluating a model on previous task (in continual learning settings),'
                              ' replace role weights with previous values')
+    parser.add_argument("--replace_filler_selector",
+                        type=str2bool,
+                        default=False,
+                        help='when evaluating a model on previous task (in continual learning settings),'
+                             ' replace filler selector weights with previous values')
+    parser.add_argument("--replace_role_selector",
+                        type=str2bool,
+                        default=False,
+                        help='when evaluating a model on previous task (in continual learning settings),'
+                             ' replace role selector weights with previous values')
 
 
     args = parser.parse_args()
