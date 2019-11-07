@@ -78,9 +78,9 @@ def main(args):
     fh.setLevel(logging.DEBUG)
     logger.addHandler(fh)
 
-    if len(args.cont_task_names) != len(set(args.cont_task_names)):
-        logger.error('Please make sure all continual tasks are distinct')
-        sys.exit('exiting the program')
+    if len(args.cont_task_names) != len(set(args.cont_task_names)) or args.task_name in args.cont_task_names:
+        logger.error('Please make sure all continual tasks are distinct and also different from source_task')
+        sys.exit('Exiting the program...')
 
     logger.info('** output_dir is {} **'.format(args.output_dir))
 
