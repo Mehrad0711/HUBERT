@@ -39,7 +39,7 @@ from utils.tasks import PROCESSORS, NUM_LABELS_TASK, TASK_TYPE
 from modules.model import BertForSequenceClassification_tpr
 from utils.evaluation import evaluate
 from utils.prediction import predict
-from utils.prepare import prepare_data_loader, prepare_model, prepare_optim
+from utils.prepare import prepare_data_loader, prepare_model, prepare_optim, modify_model
 
 import warnings
 warnings.simplefilter("ignore", UserWarning)
@@ -276,7 +276,6 @@ def main(args):
                         logger.info("Saving checkpoint pytorch_model_best.bin to {}".format(output_model_file))
                         torch.save({'state_dict': model_to_save.state_dict(), 'options': opt, 'bert_config': bert_config}, output_model_file)
 
-
             if args.do_prev_eval:
                 if best_model is None:
                     best_model = model
@@ -294,28 +293,8 @@ def main(args):
                 for j in range(i):
                     dev_task = all_tasks[j]
 
-                    # load previous task best-model classifier (and possibly other parameters)
-                    prev_model = torch.load(os.path.join(*[args.output_dir, dev_task, "pytorch_model_best.bin"]))
-
                     with torch.no_grad():
-                        pre.classifier.weight.set_(prev_model['state_dict']['classifier.weight'])
-                        pre.classifier.bias.set_(prev_model['state_dict']['classifier.bias'])
-                        if args.replace_filler:
-                            pre.head.F.weight.set_(prev_model['state_dict']['head.F.weight'])
-                            pre.head.F.bias.set_(prev_model['state_dict']['head.F.bias'])
-                        if args.replace_role:
-                            pre.head.R.weight.set_(prev_model['state_dict']['head.R.weight'])
-                            pre.head.R.bias.set_(prev_model['state_dict']['head.R.bias'])
-                        if args.replace_filler_selector:
-                            pre.head.enc_aF.weight.set_(prev_model['state_dict']['head.enc_aF.weight'])
-                            pre.head.enc_aF.bias.set_(prev_model['state_dict']['head.enc_aF.bias'])
-                            pre.head.WaF.weight.set_(prev_model['state_dict']['head.WaF.weight'])
-                            pre.head.WaF.bias.set_(prev_model['state_dict']['head.WaF.bias'])
-                        if args.replace_role_selector:
-                            pre.head.enc_aR.weight.set_(prev_model['state_dict']['head.enc_aR.weight'])
-                            pre.head.enc_aR.bias.set_(prev_model['state_dict']['head.enc_aR.bias'])
-                            pre.head.WaR.weight.set_(prev_model['state_dict']['head.WaR.weight'])
-                            pre.head.WaR.bias.set_(prev_model['state_dict']['head.WaR.bias'])
+                        modify_model(best_model, dev_task, args)
 
                     processor = PROCESSORS[dev_task.lower()](args.num_ex)
                     num_labels = NUM_LABELS_TASK[dev_task.lower()]
