@@ -20,6 +20,7 @@ predictions/
 scripts/
 workdir/
 pytorch_model_*
+workdir/
 
 # Distribution / packaging
 .Python

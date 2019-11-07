@@ -5,9 +5,16 @@
 
 This repository contains the code implementation for HUBERT, as described in:
 
-_HUBERT Untangles BERT to Improve Transfer across NLP Tasks_<br/>
+[_HUBERT Untangles BERT to Improve Transfer across NLP Tasks_](https://arxiv.org/abs/1910.12647) <br/>
 Mehrad Moradshahi, Hamid Palangi, Monica S. Lam, Paul Smolensky, Jianfeng Gao<br/>
-[Link](https://arxiv.org/abs/1910.12647) 
+
+### Abstract
+
+We introduce HUBERT which combines the structured-representational power of Tensor-Product Representations (TPRs) and BERT,
+a pre-trained bidirectional Transformer language model. We show that there is shared structure between different NLP datasets
+that HUBERT, but not BERT, is able to learn and leverage. We validate the effectiveness of our model on the GLUE benchmark and
+HANS dataset. Our experiment results show that untangling data-specific semantics from general language structure is key for
+better transfer among NLP tasks.
 
 ## Quickstart
 
@@ -17,13 +24,7 @@ Mehrad Moradshahi, Hamid Palangi, Monica S. Lam, Paul Smolensky, Jianfeng Gao<br
 2. Install required libraries </br>
    `> pip3 install -r requirements.txt`
 
-<!--#### Use docker:-->
-<!--1. Pull docker </br>-->
-<!--   ```> docker pull allenlao/pytorch-mt-dnn:v0.21```-->
 
-<!--2. Run docker </br>-->
-<!--   ```> docker run -it --rm --runtime nvidia  allenlao/pytorch-mt-dnn:v0.21 bash``` </br>-->
-<!--   Please refer to the following link if you first use docker: https://docs.docker.com/-->
 ### Dataset
 
 1. Download GLUE, SNLI, and HANS: </br>
@@ -32,20 +33,15 @@ Mehrad Moradshahi, Hamid Palangi, Monica S. Lam, Paul Smolensky, Jianfeng Gao<br
 
 ### Train and test model
 
-<!-- 	```bash
-	python3 ./data/HANS/evaluate_heur_output.py ./predictions/test_predictions.txt
-	```
- -->
-
 1. Training</br>
-	```bash
+	```console
 	python3 run_model.py --task_name $task --encoder $encoder --data_dir ./data/ --bert_model bert-base-uncased --do_train True --do_eval False --do_test False --output_dir ./results/ --train_batch_size 256 --num_train_epochs 10
 	```
 	After every epoch, your model will be saved and evaluatd on dev set. If you wish to only keep the best model checkpoint (i.e. having the best accuracy on dev set) set `--save_best_only` to True. 
 	Multi-GPU training is automatically on, so if you have more than 1 GPU, distributed training will be performed automatically. `--encoder` specifies the type of head used on top of BERT (e.g. LSTM, TPR_LSTM, TPR_Transformers)
 
 2. Testing</br>
-	```bash
+	```console
 	python3 run_model.py --no_cuda True --task_name $task --encoder $encoder --data_dir ./data/ --bert_model bert-base-uncased --do_train False --do_eval False --do_test True --load_ckpt ./results/$task/pytorch_model_best.bin --eval_batch_size 512 
 	```
 	setting `--no_cuda` to True will run the experiments on CPU. (thus, you can use a bigger batch_size for evaluation since CPU has more memory than GPU)
@@ -53,46 +49,47 @@ Mehrad Moradshahi, Hamid Palangi, Monica S. Lam, Paul Smolensky, Jianfeng Gao<br
 
 ### Transfer Learning experiments
 1. First, fine-tune HUBERT on the source-task you want to transfer the knowledge from. For example when your source task is MNLI:</br>
-	```bash
+	```console
 	python3 run_model.py --task_name MNLI --data_dir ./data/ --bert_model bert-base-uncased --do_train True --dSymbols 30 --dRoles 30 --nSymbols 50 --nRoles 35 --num_train_epochs 10 --output_dir ./trained_models/ 
 	```
 you should get ~84% accuracy on MNLI matched dev set.
 
 2. Second, load the fine-tuned model and initialize a second (only pre-trained) HUBERT model with the desired subset of paprameters from the former model. Then train, evalaute and test the model on the target task. For example when your target task is QQP and you only want to load roles:</br>
-	```bash
+	```console
 	python3 run_model.py  --task_name QQP --data_dir ../data/ --bert_model bert-base-uncased --do_train True --do_eval True --load_ckpt ./trained_models/MNLI/pytorch_model_best.bin --output_dir ./final_results/ --num_train_epochs 10 --load_bert_params False --load_role True --load_filler False
 	```
 
 	You should get ~91% accuracy on QQP dev set.
-
+	
 
 3. To evaluate your models on HANS, first run this command to generate the predictions:</br>
-	```bash
+
+	```console
 	python3 run_model.py --task_name HANS --data_dir ./data/ --bert_model bert-base-uncased --do_test True --load_ckpt ./final_results/QQP/pytorch_model_best.bin --eval_batch_size 512 --output_dir ./predictions/
 	```
 	and then this command to produce the results broken down into different categories:</br>
 
-	```bash
+	```console
 	python3 ./data/HANS/evaluate_heur_output.py ./predictions/HANS/test_predictions.txt
 	```
 
-## Continual Learning
+### Continual Learning
 
 Now you have the option to train your models on multiple datasets consecutively. Your source dataset shoud be specified with `--task_name` flag. Additional datasets are provided by using `--cont_task_names` flag and specifying the task names in comma separated format.</br> For source task, we train a HUBERT model for given number of epochs. We then choose the model with best accuracy on dev set, and use it to initialize a new model for the next task. Note that we use a fresh optimizer for each training task. For example if you want to train your model on SNLI and then fine-tune that on SST run:
-```bash
+```console
 python3 run_model.py --task_name SNLI --cont_task_names SST --data_dir ./data/ --bert_model bert-base-uncased --do_train True --do_eval True --do_test False --dSymbols 30 --dRoles 30 --nSymbols 50 --nRoles 35 --train_batch_size 256 --num_train_epochs 10  --output_dir ./continual_results/
 ```
 
 
 
-### Notes on training
+## Notes on training
 1. Gradient Accumulation </br>
   To make the training faster without much loss in accuracy you can use the `--gradient_accumulation_steps` argument. For example, if you set it to 3, the model will accumulate the gradients for 3 consecutive batches, and then perform one update step. 
 2. FP16</br>
    We support FP16 training, however, note that our results are obtained using FP32.</br>
 To use mixed-precision please install [apex](https://github.com/NVIDIA/apex) </br>, and set `--fp16` to True.
 
-### TODOs
+## TODOs
 
 - [x] Add Travis for code testing
 - [x] Support regression tasks (e.g. STS)
@@ -100,12 +97,11 @@ To use mixed-precision please install [apex](https://github.com/NVIDIA/apex) </b
 - [x] Option for continual training
 
 
-
 ## Acknowledgments
 Our implementations are in PyTorch and based on the [HuggingFace](https://github.com/huggingface/pytorch-pretrained-BERT) and BERT’s [original codebase](https://github.com/google-research/bert).
 
-### Citation
-If you use this in your work, please cite HUBERT:
+## Citation
+If you use this code in your work, please cite HUBERT:
 
 ```
 @article{Moradshahi2019Oct,

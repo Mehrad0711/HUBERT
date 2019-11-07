@@ -164,7 +164,7 @@ def main(args):
             opt = {'bidirect': args.bidirect, 'sub_word_masking': args.sub_word_masking, 'nRoles': args.nRoles, 'nSymbols': args.nSymbols,
                    'dRoles': args.dRoles, 'dSymbols': args.dSymbols, 'encoder': args.encoder, 'fixed_Role': args.fixed_Role,
                    'scale_val': args.scale_val, 'train_scale': args.train_scale, 'aggregate': args.aggregate, 'freeze_bert': args.freeze_bert,
-                   'num_rnn_layers': args.num_rnn_layers, 'num_heads': args.num_heads, 'do_src_mask': args.do_src_mask,
+                   'num_rnn_layers': args.num_rnn_layers, 'num_extra_layers': args.num_extra_layers, 'num_heads': args.num_heads, 'do_src_mask': args.do_src_mask,
                    'ortho_reg': args.ortho_reg, 'cls': args.cls}
             logger.info('*' * 50)
             logger.info('option for training: {}'.format(args))

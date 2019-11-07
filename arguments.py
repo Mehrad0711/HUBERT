@@ -271,6 +271,10 @@ def define_args():
                         type=int,
                         default=1,
                         help='number of layers for recurrent network')
+    parser.add_argument("--num_extra_layers",
+                        type=int,
+                        default=0,
+                        help='number of extra transformer layers for tpr_transformer network')
     parser.add_argument("--num_heads",
                         type=int,
                         default=8,
