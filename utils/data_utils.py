@@ -3,6 +3,7 @@ import json
 import logging
 import os
 from collections import defaultdict
+import nltk
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
@@ -47,12 +48,13 @@ class MultiInputExample(object):
 class InputFeatures(object):
     """A single set of features of data."""
 
-    def __init__(self, guid, input_ids, input_mask, segment_ids, sub_word_masks, label_id):
+    def __init__(self, guid, input_ids, input_mask, segment_ids, sub_word_masks, orig_to_token_map, label_id):
         self.guid = guid
         self.input_ids = input_ids
         self.input_mask = input_mask
         self.segment_ids = segment_ids
         self.sub_word_masks = sub_word_masks
+        self.orig_to_token_map = orig_to_token_map
         self.label_id = label_id
 
 class MultiInputFeatures(object):
@@ -715,7 +717,7 @@ class COPAProcessor(DataProcessor):
         return examples
 
 
-def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer):
+def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer, single_sentence=False, only_b=False):
     """Loads a data file into a list of `InputBatch`s."""
 
     label_map = None
@@ -727,12 +729,12 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         tokens_a = tokenizer.tokenize(example.text_a)
 
         tokens_b = None
-        if example.text_b:
+        if example.text_b and not single_sentence:
             tokens_b = tokenizer.tokenize(example.text_b)
             # Modifies `tokens_a` and `tokens_b` in place so that the total
             # length is less than the specified length.
             # Account for [CLS], [SEP], [SEP] with "- 3"
-            _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
+            _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3, only_b=only_b)
         else:
             # Account for [CLS] and [SEP] with "- 2"
             if len(tokens_a) > max_seq_length - 2:
@@ -759,9 +761,38 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
         segment_ids = [0] * len(tokens)
 
-        if tokens_b:
+        if tokens_b and not single_sentence:
             tokens += tokens_b + ["[SEP]"]
             segment_ids += [1] * (len(tokens_b) + 1)
+
+        orig_to_tok_map = []
+        do_lower = tokenizer.basic_tokenizer.do_lower_case
+
+        raw_tokens_a = nltk.word_tokenize(example.text_a.lower() if do_lower else example.text_a)
+        if tokens_b:
+            raw_tokens_b = nltk.word_tokenize(example.text_b.lower() if do_lower else example.text_b)
+
+        final_tokens = []
+        final_tokens.append("[CLS]")
+        orig_to_tok_map.append(len(final_tokens)-1)
+        for token in raw_tokens_a:
+            final_tokens.extend(tokenizer.tokenize(token))
+            orig_to_tok_map.append(len(final_tokens)-1)
+        final_tokens.append("[SEP]")
+        orig_to_tok_map.append(len(final_tokens)-1)
+
+        if tokens_b and not single_sentence:
+            for token in raw_tokens_b:
+                final_tokens.extend(tokenizer.tokenize(token))
+                orig_to_tok_map.append(len(final_tokens)-1)
+            final_tokens.append("[SEP]")
+            orig_to_tok_map.append(len(final_tokens)-1)
+
+        if len(orig_to_tok_map) > max_seq_length - 1:
+            orig_to_tok_map = orig_to_tok_map[:(max_seq_length - 1)]
+            orig_to_tok_map.append(-1)
+        if len(final_tokens) > max_seq_length:
+            final_tokens = final_tokens[:max_seq_length]
 
         # mask to keep track of the beginning of each sub-word piece
         sub_word_masks = [0 if t.startswith('##') else 1 for t in tokens]
@@ -775,15 +806,18 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         # Zero-pad up to the sequence length.
         zero_padding = [0] * (max_seq_length - len(input_ids))
         one_padding = [1] * (max_seq_length - len(input_ids))
+        minus_one_padding = [-1] * (max_seq_length - len(orig_to_tok_map))
         input_ids += zero_padding
         input_mask += zero_padding
         segment_ids += zero_padding
         sub_word_masks += one_padding
+        orig_to_tok_map += minus_one_padding
 
         assert len(input_ids) == max_seq_length
         assert len(input_mask) == max_seq_length
         assert len(segment_ids) == max_seq_length
         assert len(sub_word_masks) == max_seq_length
+        assert len(orig_to_tok_map) == max_seq_length
 
         if label_map:
             if example.label:
@@ -810,13 +844,8 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             if example.label is not None:
                 logger.info("label: %s (id = %d)" % (example.label, label_id))
 
-        features.append(
-            InputFeatures(guid=guid,
-                          input_ids=input_ids,
-                          input_mask=input_mask,
-                          segment_ids=segment_ids,
-                          sub_word_masks=sub_word_masks,
-                          label_id=label_id))
+        features.append(InputFeatures(guid, input_ids, input_mask, segment_ids, sub_word_masks, orig_to_tok_map, label_id))
+
     return features
 
 
@@ -843,7 +872,7 @@ def convert_multi_examples_to_features(examples, label_list, max_seq_length, tok
             # Modifies `tokens_a` and `tokens_b` in place so that the total
             # length is less than the specified length.
             # Account for [CLS], [SEP], [SEP] with "- 3"
-            _truncate_seq_pair(premise, choice, max_seq_length - 3)
+            _truncate_seq_pair(premise, choice, max_seq_length - 3, only_b=False)
         # The convention in BERT is:
         # (a) For sequence pairs:
         #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
@@ -927,7 +956,7 @@ def convert_multi_examples_to_features(examples, label_list, max_seq_length, tok
     return features
 
 
-def _truncate_seq_pair(tokens_a, tokens_b, max_length):
+def _truncate_seq_pair(tokens_a, tokens_b, max_length, only_b=False):
     """Truncates a sequence pair in place to the maximum length."""
 
     # This is a simple heuristic which will always truncate the longer sequence
@@ -938,7 +967,7 @@ def _truncate_seq_pair(tokens_a, tokens_b, max_length):
         total_length = len(tokens_a) + len(tokens_b)
         if total_length <= max_length:
             break
-        if len(tokens_a) > len(tokens_b):
+        if len(tokens_a) > len(tokens_b) and not only_b:
             tokens_a.pop()
         else:
             tokens_b.pop()

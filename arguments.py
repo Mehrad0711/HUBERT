@@ -328,6 +328,24 @@ def define_args():
                         default=False,
                         help='when evaluating a model on previous task (in continual learning settings),'
                              ' replace role selector weights with previous values')
+    parser.add_argument("--reset_temp_ratio",
+                        type=float,
+                        default=1.0,
+                        help='set temperature to a smaller value during evaluation and testing')
+    # attention arguments
+    parser.add_argument("--save_tpr_attentions",
+                        type=str2bool,
+                        default=False,
+                        help='save aFs and aRs')
+    parser.add_argument("--data_split_attention",
+                        type=str,
+                        default='dev',
+                        choices=['train', 'dev', 'test'],
+                        help='which split of data to choose for saving aFs and aRs attentions')
+    parser.add_argument("--single_sentence",
+                        type=str2bool,
+                        default=False,
+                        help='omit hypothesis for paired-input tasks')
 
 
     args = parser.parse_args()

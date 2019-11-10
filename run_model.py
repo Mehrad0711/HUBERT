@@ -24,6 +24,8 @@ import shutil
 import logging
 import os
 import sys
+import json
+import pickle
 
 import numpy as np
 import torch
@@ -43,7 +45,6 @@ from utils.prepare import prepare_data_loader, prepare_model, prepare_optim, mod
 
 import warnings
 warnings.simplefilter("ignore", UserWarning)
-
 
 def decay(value, mode, final_ratio, global_step, t_total):
     assert final_ratio <= 1.0
@@ -191,8 +192,8 @@ def main(args):
                 nb_tr_examples, nb_tr_steps = 0, 0
                 for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                     batch = tuple(t.to(device) for t in batch)
-                    input_ids, input_mask, segment_ids, sub_word_masks, label_ids = batch
-                    _, loss = model(input_ids, segment_ids, input_mask, sub_word_masks, label_ids)
+                    input_ids, input_mask, segment_ids, sub_word_masks, orig_to_token_maps, label_ids = batch
+                    _, loss, _ = model(input_ids, segment_ids, input_mask, sub_word_masks, label_ids)
                     if n_gpu > 1:
                         loss = loss.mean()  # mean() to average on multi-gpu.
                     if args.gradient_accumulation_steps > 1:
@@ -258,7 +259,7 @@ def main(args):
                 if args.do_eval:
                     # evaluate model after every epoch
                     model.eval()
-                    result = evaluate(args, model, eval_dataloader, device, task_type, global_step, tr_loss, nb_tr_steps)
+                    result, _ = evaluate(args, model, eval_dataloader, device, task_type, global_step, tr_loss, nb_tr_steps)
                     for key in sorted(result.keys()):
                         if key == 'eval_loss':
                             tensorboard_writer.add_scalar('eval/loss', result[key], global_step)
@@ -283,7 +284,7 @@ def main(args):
 
                 # evaluate best model on current task
                 dev_task = task
-                result = evaluate(args, best_model, eval_dataloader, device, task_type)
+                result, _ = evaluate(args, best_model, eval_dataloader, device, task_type)
                 logger.info("train_task: {}, eval_task: {}".format(task, dev_task))
                 for key in sorted(result.keys()):
                     logger.info("  %s = %s", key, str(result[key]))
@@ -306,7 +307,7 @@ def main(args):
                     pre.task_type = task_type
                     eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, dev_task, tokenizer, split='dev')
 
-                    result = evaluate(args, best_model, eval_dataloader, device, task_type)
+                    result, _ = evaluate(args, best_model, eval_dataloader, device, task_type)
                     logger.info("train_task: {}, eval_task: {}".format(task, dev_task))
                     for key in sorted(result.keys()):
                         logger.info("  %s = %s", key, str(result[key]))
@@ -333,17 +334,20 @@ def main(args):
             output_model_file = os.path.join(args.load_ckpt)
 
         #prepare data
-        eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer, split='dev')
+        split = args.data_split_attention if args.save_tpr_attentions else 'dev'
+        only_b = True if args.save_tpr_attentions else False
+
+        eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer,
+                                              split=split, single_sentence=args.single_sentence, only_b=only_b)
 
         states = torch.load(output_model_file, map_location=device)
         model_state_dict = states['state_dict']
         opt = states['options']
         if 'nRoles' not in opt:
-            print(args.nRoles)
             for val in ['nRoles', 'nSymbols', 'dRoles', 'dSymbols']:
                 opt[val] = getattr(args, val)
-        bert_config = states['bert_config']
 
+        bert_config = states['bert_config']
         if not isinstance(bert_config, PretrainedConfig):
             bert_dict = bert_config.to_dict()
             bert_dict['layer_norm_eps'] = 1e-12
@@ -363,13 +367,28 @@ def main(args):
                                                   max_seq_len=args.max_seq_length,
                                                   **opt)
 
-        model.load_state_dict(model_state_dict, strict=True)
+        model.load_state_dict(model_state_dict, strict=False)
+
+        if args.reset_temp_ratio != 1.0 and hasattr(model.head, 'temperature'):
+            new_temp = model.head.temperature / args.reset_temp_ratio
+            model.head.temperature = new_temp
+
         model.to(device)
         model.eval()
-        result = evaluate(args, model, eval_dataloader, device, task_type)
+        result, (all_ids, F_list, R_list) = evaluate(args, model, eval_dataloader, device, task_type, data_split=args.data_split_attention)
 
         if not os.path.exists(os.path.join(args.output_dir, eval_task_name)):
             os.makedirs(os.path.join(args.output_dir, eval_task_name))
+
+        if args.save_tpr_attentions:
+            output_attention_file = os.path.join(*[args.output_dir, eval_task_name, "tpr_attention.txt"])
+            vals = {}
+            for i in range(len(all_ids)):
+                vals[all_ids[i]] = {'all_aFs': F_list[i], 'all_aRs': R_list[i]}
+            logger.info('saving tpr_attentions to {} '.format(output_attention_file))
+            with open(output_attention_file, "w") as fp:
+                json.dump(vals, fp)
+
         output_eval_file = os.path.join(*[args.output_dir, eval_task_name, "eval_results.txt"])
         logger.info("***** Eval results *****")
         logger.info("  eval output file is in {}".format(output_eval_file))
@@ -431,6 +450,10 @@ def main(args):
         model.load_state_dict(model_state_dict, strict=True)
         model.to(device)
         model.eval()
+
+        if args.reset_temp_ratio != 1.0 and hasattr(model.head, 'temperature'):
+            new_temp = model.head.temperature / args.reset_temp_ratio
+            model.head.temperature = new_temp
 
         if test_task_name.lower().startswith('dnc'):
             test_examples = processor.get_all_examples(args.data_dir)

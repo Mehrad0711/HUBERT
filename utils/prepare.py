@@ -14,7 +14,7 @@ from torch.utils.data import TensorDataset, DataLoader, RandomSampler, Sequentia
 from torch.utils.data.distributed import DistributedSampler
 
 
-def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split, examples=None):
+def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split, single_sentence, only_b, examples=None):
 
     data_dir = os.path.join(args.data_dir, task)
 
@@ -26,7 +26,7 @@ def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer,
         if split == 'test':
             examples = processor.get_test_examples(data_dir)
 
-    features = convert_examples_to_features(examples, label_list, args.max_seq_length, tokenizer)
+    features = convert_examples_to_features(examples, label_list, args.max_seq_length, tokenizer, single_sentence, only_b)
     logger.info("***** preparing data *****")
     logger.info("  Num examples = %d", len(examples))
     batch_size = args.train_batch_size if split == 'train' else args.eval_batch_size
@@ -35,19 +35,20 @@ def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer,
     all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.uint8)
     all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
     all_sub_word_masks = torch.tensor([f.sub_word_masks for f in features], dtype=torch.uint8)
+    all_orig_to_token_maps = torch.tensor([f.orig_to_token_map for f in features], dtype=torch.long)
 
     if split == 'test':
         if task.lower() == 'snli':
             all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.long)
-            data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_sub_word_masks, all_label_ids)
+            data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_sub_word_masks, all_orig_to_token_maps, all_label_ids)
         else:
-            data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_sub_word_masks)
+            data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_sub_word_masks, all_orig_to_token_maps)
     else:
         if task_type != 1:
             all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.long)
         else:
             all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.float32)
-        data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_sub_word_masks, all_label_ids)
+        data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_sub_word_masks, all_orig_to_token_maps, all_label_ids)
 
     if split == 'train':
         if args.local_rank == -1:
