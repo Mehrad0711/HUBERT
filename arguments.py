@@ -337,6 +337,11 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help='save aFs and aRs')
+    parser.add_argument("--save_strategy",
+                        type=str,
+                        default='top',
+                        help='method to retrieve tpr attention values',
+                        choices=['top', 'sample'])
     parser.add_argument("--data_split_attention",
                         type=str,
                         default='dev',
@@ -346,7 +351,14 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help='omit hypothesis for paired-input tasks')
-
+    parser.add_argument("--K",
+                        type=int,
+                        default=1,
+                        help='choose K biggest value from tpr attentions')
+    parser.add_argument("--get_POS",
+                        type=str2bool,
+                        default=False,
+                        help='get POS tags for tokens')
 
     args = parser.parse_args()
 

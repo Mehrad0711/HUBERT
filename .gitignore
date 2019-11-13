@@ -21,6 +21,7 @@ scripts/
 workdir/
 pytorch_model_*
 workdir/
+*plot*
 
 # Distribution / packaging
 .Python

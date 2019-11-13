@@ -14,7 +14,7 @@ from torch.utils.data import TensorDataset, DataLoader, RandomSampler, Sequentia
 from torch.utils.data.distributed import DistributedSampler
 
 
-def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split, single_sentence, only_b, examples=None):
+def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split, single_sentence=False, return_tags=False, examples=None):
 
     data_dir = os.path.join(args.data_dir, task)
 
@@ -26,7 +26,7 @@ def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer,
         if split == 'test':
             examples = processor.get_test_examples(data_dir)
 
-    features = convert_examples_to_features(examples, label_list, args.max_seq_length, tokenizer, single_sentence, only_b)
+    features, token_tags = convert_examples_to_features(examples, label_list, args.max_seq_length, tokenizer, single_sentence)
     logger.info("***** preparing data *****")
     logger.info("  Num examples = %d", len(examples))
     batch_size = args.train_batch_size if split == 'train' else args.eval_batch_size
@@ -60,11 +60,15 @@ def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer,
 
     dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
 
+
+    return_vals = [dataloader]
     if split == 'test':
         all_guids = [f.guid for f in features]
-        return dataloader, all_guids
-    else:
-        return dataloader
+        return_vals.append(all_guids)
+    if return_tags:
+        return_vals.append(token_tags)
+
+    return return_vals
 
 
 def prepare_optim(args, num_train_steps, param_optimizer):

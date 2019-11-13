@@ -4,6 +4,7 @@ import logging
 import os
 from collections import defaultdict
 import nltk
+import re
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
 
-    def __init__(self, guid, text_a, text_b=None, label=None):
+    def __init__(self, guid, text_a, text_b=None, label=None, parsed_a=None, parsed_b=None):
         """Constructs a InputExample.
 
         Args:
@@ -29,6 +30,8 @@ class InputExample(object):
         self.text_a = text_a
         self.text_b = text_b
         self.label = label
+        self.parsed_a = parsed_a
+        self.parsed_b = parsed_b
 
 class MultiInputExample(object):
     """A single training/test example for more complex sequence classification tasks (e,g, SuperGLUE)."""
@@ -112,7 +115,7 @@ class DataProcessor(object):
             return data
 
 class NLIProcessor(DataProcessor):
-    """Processor for the SNLI data set (GLUE version)."""
+    """Processor for the general NLI data set (GLUE version)."""
 
     def __init__(self, num_ex):
         super(NLIProcessor, self).__init__(num_ex)
@@ -153,7 +156,7 @@ class NLIProcessor(DataProcessor):
 
 
 class ACCProcessor(DataProcessor):
-    """Processor for the SNLI data set (GLUE version)."""
+    """Processor for the ... data set (GLUE version)."""
 
     def __init__(self, num_ex):
         super(ACCProcessor, self).__init__(num_ex)
@@ -238,7 +241,7 @@ class SNLIProcessor(DataProcessor):
         return examples
 
 class HANSProcessor(DataProcessor):
-    """Processor for the MNLI data set (GLUE version)."""
+    """Processor for the HANS data set (GLUE version)."""
 
     def __init__(self, num_ex):
         super(HANSProcessor, self).__init__(num_ex)
@@ -281,7 +284,8 @@ class HANSProcessor(DataProcessor):
 class MNLIProcessor(DataProcessor):
     """Processor for the MNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex):
+    def __init__(self, num_ex, pos_tags=False):
+        self.pos_tags = pos_tags
         super(MNLIProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
@@ -307,6 +311,7 @@ class MNLIProcessor(DataProcessor):
     def _create_examples(self, lines, set_type):
         """Creates examples for the training and dev sets."""
         examples = []
+        # get_transitions = lambda parse: ['reduce' if t == ')' else 'shift' for t in parse if t != '(']
         for (i, line) in enumerate(lines):
             if i == 0: continue
             guid = "%s-%s" % (set_type, line[0])
@@ -316,8 +321,15 @@ class MNLIProcessor(DataProcessor):
                 label = None
             else:
                 label = line[-1]
+
+            text_a_parsed = None
+            text_b_parsed = None
+            if self.pos_tags:
+                text_a_parsed = re.findall(r'\([^\)\(]*\)', line[6])
+                text_b_parsed = re.findall(r'\([^\)\(]*\)', line[7])
+
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
 
 
@@ -717,7 +729,7 @@ class COPAProcessor(DataProcessor):
         return examples
 
 
-def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer, single_sentence=False, only_b=False):
+def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer, single_sentence=False):
     """Loads a data file into a list of `InputBatch`s."""
 
     label_map = None
@@ -725,85 +737,68 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         label_map = {label: i for i, label in enumerate(label_list)}
 
     features = []
+    token_tags = []
     for (ex_index, example) in enumerate(examples):
-        tokens_a = tokenizer.tokenize(example.text_a)
 
+        do_lower = tokenizer.basic_tokenizer.do_lower_case
         tokens_b = None
+
+        tokens_a = nltk.word_tokenize(example.text_a.lower() if do_lower else example.text_a)
         if example.text_b and not single_sentence:
-            tokens_b = tokenizer.tokenize(example.text_b)
-            # Modifies `tokens_a` and `tokens_b` in place so that the total
-            # length is less than the specified length.
-            # Account for [CLS], [SEP], [SEP] with "- 3"
-            _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3, only_b=only_b)
+            tokens_b = nltk.word_tokenize(example.text_b.lower() if do_lower else example.text_b)
+            _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
         else:
-            # Account for [CLS] and [SEP] with "- 2"
             if len(tokens_a) > max_seq_length - 2:
                 tokens_a = tokens_a[:(max_seq_length - 2)]
 
-        # The convention in BERT is:
-        # (a) For sequence pairs:
-        #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
-        #  type_ids: 0   0  0    0    0     0       0 0    1  1  1  1   1 1
-        # (b) For single sequences:
-        #  tokens:   [CLS] the dog is hairy . [SEP]
-        #  type_ids: 0   0   0   0  0     0 0
-        #
-        # Where "type_ids" are used to indicate whether this is the first
-        # sequence or the second sequence. The embedding vectors for `type=0` and
-        # `type=1` were learned during pre-training and are added to the wordpiece
-        # embedding vector (and position vector). This is not *strictly* necessary
-        # since the [SEP] token unambigiously separates the sequences, but it makes
-        # it easier for the model to learn the concept of sequences.
-        #
-        # For classification tasks, the first vector (corresponding to [CLS]) is
-        # used as as the "sentence vector". Note that this only makes sense because
-        # the entire model is fine-tuned.
-        tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
-        segment_ids = [0] * len(tokens)
-
-        if tokens_b and not single_sentence:
-            tokens += tokens_b + ["[SEP]"]
-            segment_ids += [1] * (len(tokens_b) + 1)
+        if tokens_b:
+            raw_tokens = tokens_a + ['[SEP]'] + tokens_b
+        else:
+            raw_tokens = tokens_a
 
         orig_to_tok_map = []
-        do_lower = tokenizer.basic_tokenizer.do_lower_case
+        tokens = []
+        segment_ids = []
 
-        raw_tokens_a = nltk.word_tokenize(example.text_a.lower() if do_lower else example.text_a)
-        if tokens_b:
-            raw_tokens_b = nltk.word_tokenize(example.text_b.lower() if do_lower else example.text_b)
+        tokens.append("[CLS]")
+        segment_ids.append(0)
+        orig_to_tok_map.append(len(tokens)-1)
+        for token in tokens_a:
+            tokenized_tokens = tokenizer.tokenize(token)
+            if len(tokens) + len(tokenized_tokens) >= max_seq_length - 1:
+                break
+            tokens.extend(tokenized_tokens)
+            orig_to_tok_map.append(len(tokens)-1)
+            segment_ids.extend([0]*len(tokenized_tokens))
+        tokens.append("[SEP]")
+        segment_ids.append(0)
+        orig_to_tok_map.append(len(tokens)-1)
 
-        final_tokens = []
-        final_tokens.append("[CLS]")
-        orig_to_tok_map.append(len(final_tokens)-1)
-        for token in raw_tokens_a:
-            final_tokens.extend(tokenizer.tokenize(token))
-            orig_to_tok_map.append(len(final_tokens)-1)
-        final_tokens.append("[SEP]")
-        orig_to_tok_map.append(len(final_tokens)-1)
+        if tokens_b and len(tokens) < max_seq_length - 1:
+            for token in tokens_b:
+                tokenized_tokens = tokenizer.tokenize(token)
+                if len(tokens) + len(tokenized_tokens) >= max_seq_length - 1:
+                    break
+                tokens.extend(tokenized_tokens)
+                orig_to_tok_map.append(len(tokens)-1)
+                segment_ids.extend([1]*len(tokenized_tokens))
+            if tokens[-1] != '[SEP]' and len(tokens) <= max_seq_length - 1:
+                tokens.append("[SEP]")
+                segment_ids.append(1)
+                orig_to_tok_map.append(len(tokens)-1)
 
-        if tokens_b and not single_sentence:
-            for token in raw_tokens_b:
-                final_tokens.extend(tokenizer.tokenize(token))
-                orig_to_tok_map.append(len(final_tokens)-1)
-            final_tokens.append("[SEP]")
-            orig_to_tok_map.append(len(final_tokens)-1)
-
-        if len(orig_to_tok_map) > max_seq_length - 1:
-            orig_to_tok_map = orig_to_tok_map[:(max_seq_length - 1)]
-            orig_to_tok_map.append(-1)
-        if len(final_tokens) > max_seq_length:
-            final_tokens = final_tokens[:max_seq_length]
+        input_ids = tokenizer.convert_tokens_to_ids(tokens)
 
         # mask to keep track of the beginning of each sub-word piece
         sub_word_masks = [0 if t.startswith('##') else 1 for t in tokens]
-
-        input_ids = tokenizer.convert_tokens_to_ids(tokens)
 
         # The mask has 1 for real tokens and 0 for padding tokens. Only real
         # tokens are attended to.
         input_mask = [1] * len(input_ids)
 
-        # Zero-pad up to the sequence length.
+        assert len(input_ids) == len(segment_ids) == len(input_mask) == len(sub_word_masks)
+
+        # pad up or cut to the sequence length
         zero_padding = [0] * (max_seq_length - len(input_ids))
         one_padding = [1] * (max_seq_length - len(input_ids))
         minus_one_padding = [-1] * (max_seq_length - len(orig_to_tok_map))
@@ -831,7 +826,6 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
                 label_id = None
 
         guid = example.guid
-
         if ex_index < 5:
             logger.info("*** Example ***")
             logger.info("guid: %s" % (example.guid))
@@ -844,9 +838,15 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             if example.label is not None:
                 logger.info("label: %s (id = %d)" % (example.label, label_id))
 
+        if example.parsed_a:
+            if example.parsed_b and not single_sentence:
+                token_tags.append((example.parsed_a, example.parsed_b))
+            else:
+                token_tags.append((example.parsed_a,))
+
         features.append(InputFeatures(guid, input_ids, input_mask, segment_ids, sub_word_masks, orig_to_tok_map, label_id))
 
-    return features
+    return features, token_tags
 
 
 def convert_multi_examples_to_features(examples, label_list, max_seq_length, tokenizer):
@@ -872,7 +872,7 @@ def convert_multi_examples_to_features(examples, label_list, max_seq_length, tok
             # Modifies `tokens_a` and `tokens_b` in place so that the total
             # length is less than the specified length.
             # Account for [CLS], [SEP], [SEP] with "- 3"
-            _truncate_seq_pair(premise, choice, max_seq_length - 3, only_b=False)
+            _truncate_seq_pair(premise, choice, max_seq_length - 3)
         # The convention in BERT is:
         # (a) For sequence pairs:
         #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
@@ -956,7 +956,7 @@ def convert_multi_examples_to_features(examples, label_list, max_seq_length, tok
     return features
 
 
-def _truncate_seq_pair(tokens_a, tokens_b, max_length, only_b=False):
+def _truncate_seq_pair(tokens_a, tokens_b, max_length):
     """Truncates a sequence pair in place to the maximum length."""
 
     # This is a simple heuristic which will always truncate the longer sequence
@@ -967,7 +967,7 @@ def _truncate_seq_pair(tokens_a, tokens_b, max_length, only_b=False):
         total_length = len(tokens_a) + len(tokens_b)
         if total_length <= max_length:
             break
-        if len(tokens_a) > len(tokens_b) and not only_b:
+        if len(tokens_a) > len(tokens_b):
             tokens_a.pop()
         else:
             tokens_b.pop()

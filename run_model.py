@@ -45,6 +45,7 @@ from utils.prepare import prepare_data_loader, prepare_model, prepare_optim, mod
 
 import warnings
 warnings.simplefilter("ignore", UserWarning)
+warnings.simplefilter("ignore", FutureWarning)
 
 def decay(value, mode, final_ratio, global_step, t_total):
     assert final_ratio <= 1.0
@@ -320,7 +321,8 @@ def main(args):
 
         eval_task_name = all_tasks[-1]
         logger.info('*** Start evaluating for {} ***'.format(eval_task_name))
-        processor = PROCESSORS[eval_task_name.lower()](args.num_ex)
+        return_tags = args.save_tpr_attentions
+        processor = PROCESSORS[eval_task_name.lower()](args.num_ex, return_tags)
         num_labels = NUM_LABELS_TASK[eval_task_name.lower()]
         task_type = TASK_TYPE[eval_task_name.lower()]
         label_list = None
@@ -335,10 +337,18 @@ def main(args):
 
         #prepare data
         split = args.data_split_attention if args.save_tpr_attentions else 'dev'
-        only_b = True if args.save_tpr_attentions else False
 
-        eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer,
-                                              split=split, single_sentence=args.single_sentence, only_b=only_b)
+        eval_dataloader, token_tags = prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer,
+                                              split=split, single_sentence=args.single_sentence, return_tags=return_tags)
+
+        # tags = []
+        # if args.get_POS:
+        #
+        #     from nltk.tag import StanfordPOSTagger
+        #     pos_tagger = StanfordPOSTagger(args.stanford_model, args.stanford_jar, encoding='utf8')
+        #     for input_ids, input_mask, segment_ids, sub_word_masks, orig_to_token_maps, label_ids in tqdm(eval_dataloader, desc="tagging"):
+        #         tags[input_ids] = pos_tagger.tag(input_ids)
+        #
 
         states = torch.load(output_model_file, map_location=device)
         model_state_dict = states['state_dict']
@@ -367,7 +377,7 @@ def main(args):
                                                   max_seq_len=args.max_seq_length,
                                                   **opt)
 
-        model.load_state_dict(model_state_dict, strict=False)
+        model.load_state_dict(model_state_dict, strict=True)
 
         if args.reset_temp_ratio != 1.0 and hasattr(model.head, 'temperature'):
             new_temp = model.head.temperature / args.reset_temp_ratio
@@ -375,7 +385,8 @@ def main(args):
 
         model.to(device)
         model.eval()
-        result, (all_ids, F_list, R_list) = evaluate(args, model, eval_dataloader, device, task_type, data_split=args.data_split_attention)
+        result, (all_ids, F_list, R_list) = evaluate(args, model, eval_dataloader, device, task_type,
+                                                     data_split=split, save_tpr_attentions=args.save_tpr_attentions)
 
         if not os.path.exists(os.path.join(args.output_dir, eval_task_name)):
             os.makedirs(os.path.join(args.output_dir, eval_task_name))
@@ -383,8 +394,18 @@ def main(args):
         if args.save_tpr_attentions:
             output_attention_file = os.path.join(*[args.output_dir, eval_task_name, "tpr_attention.txt"])
             vals = {}
+            tags = [[subval.split()[0][1:] for subval in val[0]] for val in token_tags]
+            tokens = [[subval.split()[1][:-1] for subval in val[0]] for val in token_tags]
+            bad_sents_count = 0
             for i in range(len(all_ids)):
-                vals[all_ids[i]] = {'all_aFs': F_list[i], 'all_aRs': R_list[i]}
+                try:
+                    assert len(tokens[i]) == len(tags[i]) == len(F_list[i]) == len(R_list[i])
+                    vals[all_ids[i]] = {'all_aFs': F_list[i], 'all_aRs': R_list[i], 'tokens': tokens[i], 'tags': tags[i]}
+                except:
+                    # import pdb; pdb.set_trace()
+                    bad_sents_count += 1
+            logger.info('Could not parse {} sentences out of all {} data points'.format(bad_sents_count, len(all_ids)))
+
             logger.info('saving tpr_attentions to {} '.format(output_attention_file))
             with open(output_attention_file, "w") as fp:
                 json.dump(vals, fp)
