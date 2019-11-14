@@ -338,8 +338,16 @@ def main(args):
         #prepare data
         split = args.data_split_attention if args.save_tpr_attentions else 'dev'
 
-        eval_dataloader, token_tags = prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer,
+        return_vals = prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer,
                                               split=split, single_sentence=args.single_sentence, return_tags=return_tags)
+        if len(return_vals) == 1:
+            eval_dataloader = return_vals[0]
+        elif len(return_vals) == 2 and args.save_tpr_attentions:
+            eval_dataloader, token_tags = return_vals
+        elif len(return_vals) == 2 and split == 'test':
+            eval_dataloader, all_guids = return_vals
+        else:
+            eval_dataloader, all_guids, token_tags = return_vals
 
         # tags = []
         # if args.get_POS:
