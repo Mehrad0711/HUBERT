@@ -3,6 +3,9 @@ import json
 import logging
 import os
 from collections import defaultdict
+import nltk
+import re
+nltk.download('punkt')
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
@@ -12,7 +15,7 @@ logger = logging.getLogger(__name__)
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
 
-    def __init__(self, guid, text_a, text_b=None, label=None):
+    def __init__(self, guid, text_a, text_b=None, label=None, parsed_a=None, parsed_b=None):
         """Constructs a InputExample.
 
         Args:
@@ -28,6 +31,8 @@ class InputExample(object):
         self.text_a = text_a
         self.text_b = text_b
         self.label = label
+        self.parsed_a = parsed_a
+        self.parsed_b = parsed_b
 
 class MultiInputExample(object):
     """A single training/test example for more complex sequence classification tasks (e,g, SuperGLUE)."""
@@ -47,12 +52,13 @@ class MultiInputExample(object):
 class InputFeatures(object):
     """A single set of features of data."""
 
-    def __init__(self, guid, input_ids, input_mask, segment_ids, sub_word_masks, label_id):
+    def __init__(self, guid, input_ids, input_mask, segment_ids, sub_word_masks, orig_to_token_map, label_id):
         self.guid = guid
         self.input_ids = input_ids
         self.input_mask = input_mask
         self.segment_ids = segment_ids
         self.sub_word_masks = sub_word_masks
+        self.orig_to_token_map = orig_to_token_map
         self.label_id = label_id
 
 class MultiInputFeatures(object):
@@ -69,8 +75,9 @@ class MultiInputFeatures(object):
 class DataProcessor(object):
     """Base class for data converters for sequence classification data sets."""
 
-    def __init__(self, num_ex):
+    def __init__(self, num_ex, pos_tags):
         self.num_ex = num_ex
+        self.pos_tags = pos_tags
 
     def get_train_examples(self, data_dir):
         """Gets a collection of `InputExample`s for the train set."""
@@ -110,10 +117,10 @@ class DataProcessor(object):
             return data
 
 class NLIProcessor(DataProcessor):
-    """Processor for the SNLI data set (GLUE version)."""
+    """Processor for the general NLI data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(NLIProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(NLIProcessor, self).__init__(num_ex, pos_tags)
         self.data = defaultdict()
         # self.metadata = defaultdict()
 
@@ -151,10 +158,10 @@ class NLIProcessor(DataProcessor):
 
 
 class ACCProcessor(DataProcessor):
-    """Processor for the SNLI data set (GLUE version)."""
+    """Processor for the ... data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(ACCProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(ACCProcessor, self).__init__(num_ex, pos_tags)
         self.data = defaultdict()
         # self.metadata = defaultdict()
 
@@ -196,8 +203,8 @@ class ACCProcessor(DataProcessor):
 class SNLIProcessor(DataProcessor):
     """Processor for the SNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(SNLIProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(SNLIProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -231,15 +238,22 @@ class SNLIProcessor(DataProcessor):
                 label = line[-1]
             else:
                 label = line[-1]
+
+            text_a_parsed = None
+            text_b_parsed = None
+            if self.pos_tags:
+                text_a_parsed = re.findall(r'\([^\)\(]*\)', line[6])
+                text_b_parsed = re.findall(r'\([^\)\(]*\)', line[7])
+
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
 
 class HANSProcessor(DataProcessor):
-    """Processor for the MNLI data set (GLUE version)."""
+    """Processor for the HANS data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(HANSProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(HANSProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -279,8 +293,8 @@ class HANSProcessor(DataProcessor):
 class MNLIProcessor(DataProcessor):
     """Processor for the MNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(MNLIProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(MNLIProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -305,6 +319,7 @@ class MNLIProcessor(DataProcessor):
     def _create_examples(self, lines, set_type):
         """Creates examples for the training and dev sets."""
         examples = []
+        # get_transitions = lambda parse: ['reduce' if t == ')' else 'shift' for t in parse if t != '(']
         for (i, line) in enumerate(lines):
             if i == 0: continue
             guid = "%s-%s" % (set_type, line[0])
@@ -314,16 +329,23 @@ class MNLIProcessor(DataProcessor):
                 label = None
             else:
                 label = line[-1]
+
+            text_a_parsed = None
+            text_b_parsed = None
+            if self.pos_tags:
+                text_a_parsed = re.findall(r'\([^\)\(]*\)', line[6])
+                text_b_parsed = re.findall(r'\([^\)\(]*\)', line[7])
+
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
 
 
 class MRPCProcessor(DataProcessor):
     """Processor for the MRPC data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(MRPCProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(MRPCProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -364,8 +386,8 @@ class MRPCProcessor(DataProcessor):
 class QNLIProcessor(DataProcessor):
     """Processor for the QNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(QNLIProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(QNLIProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -406,8 +428,8 @@ class QNLIProcessor(DataProcessor):
 class QQPProcessor(DataProcessor):
     """Processor for the QQP data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(QQPProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(QQPProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -453,8 +475,8 @@ class QQPProcessor(DataProcessor):
 class RTEProcessor(DataProcessor):
     """Processor for the RTE data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(RTEProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(RTEProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -498,8 +520,8 @@ class RTEProcessor(DataProcessor):
 class WNLIProcessor(DataProcessor):
     """Processor for the WNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(WNLIProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(WNLIProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -544,8 +566,8 @@ class WNLIProcessor(DataProcessor):
 class SSTProcessor(DataProcessor):
     """Processor for the SST data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(SSTProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(SSTProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -589,8 +611,8 @@ class SSTProcessor(DataProcessor):
 class STSProcessor(DataProcessor):
     """Processor for the STS data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(STSProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(STSProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -635,8 +657,8 @@ class STSProcessor(DataProcessor):
 class COLAProcessor(DataProcessor):
     """Processor for the CoLA data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(COLAProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(COLAProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -680,8 +702,8 @@ class COLAProcessor(DataProcessor):
 class COPAProcessor(DataProcessor):
     """Processor for the COPA data set (SuperGLUE version)."""
 
-    def __init__(self, num_ex):
-        super(COPAProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(COPAProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -715,7 +737,7 @@ class COPAProcessor(DataProcessor):
         return examples
 
 
-def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer):
+def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer, single_sentence=False):
     """Loads a data file into a list of `InputBatch`s."""
 
     label_map = None
@@ -723,67 +745,82 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         label_map = {label: i for i, label in enumerate(label_list)}
 
     features = []
+    token_tags = []
     for (ex_index, example) in enumerate(examples):
-        tokens_a = tokenizer.tokenize(example.text_a)
 
+        do_lower = tokenizer.basic_tokenizer.do_lower_case
         tokens_b = None
-        if example.text_b:
-            tokens_b = tokenizer.tokenize(example.text_b)
-            # Modifies `tokens_a` and `tokens_b` in place so that the total
-            # length is less than the specified length.
-            # Account for [CLS], [SEP], [SEP] with "- 3"
+
+        tokens_a = nltk.word_tokenize(example.text_a.lower() if do_lower else example.text_a)
+        if example.text_b and not single_sentence:
+            tokens_b = nltk.word_tokenize(example.text_b.lower() if do_lower else example.text_b)
             _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
         else:
-            # Account for [CLS] and [SEP] with "- 2"
             if len(tokens_a) > max_seq_length - 2:
                 tokens_a = tokens_a[:(max_seq_length - 2)]
 
-        # The convention in BERT is:
-        # (a) For sequence pairs:
-        #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
-        #  type_ids: 0   0  0    0    0     0       0 0    1  1  1  1   1 1
-        # (b) For single sequences:
-        #  tokens:   [CLS] the dog is hairy . [SEP]
-        #  type_ids: 0   0   0   0  0     0 0
-        #
-        # Where "type_ids" are used to indicate whether this is the first
-        # sequence or the second sequence. The embedding vectors for `type=0` and
-        # `type=1` were learned during pre-training and are added to the wordpiece
-        # embedding vector (and position vector). This is not *strictly* necessary
-        # since the [SEP] token unambigiously separates the sequences, but it makes
-        # it easier for the model to learn the concept of sequences.
-        #
-        # For classification tasks, the first vector (corresponding to [CLS]) is
-        # used as as the "sentence vector". Note that this only makes sense because
-        # the entire model is fine-tuned.
-        tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
-        segment_ids = [0] * len(tokens)
-
         if tokens_b:
-            tokens += tokens_b + ["[SEP]"]
-            segment_ids += [1] * (len(tokens_b) + 1)
+            raw_tokens = tokens_a + ['[SEP]'] + tokens_b
+        else:
+            raw_tokens = tokens_a
+
+        orig_to_tok_map = []
+        tokens = []
+        segment_ids = []
+
+        tokens.append("[CLS]")
+        segment_ids.append(0)
+        orig_to_tok_map.append(len(tokens)-1)
+        for token in tokens_a:
+            tokenized_tokens = tokenizer.tokenize(token)
+            if len(tokens) + len(tokenized_tokens) >= max_seq_length - 1:
+                break
+            tokens.extend(tokenized_tokens)
+            orig_to_tok_map.append(len(tokens)-1)
+            segment_ids.extend([0]*len(tokenized_tokens))
+        tokens.append("[SEP]")
+        segment_ids.append(0)
+        orig_to_tok_map.append(len(tokens)-1)
+
+        if tokens_b and len(tokens) < max_seq_length - 1:
+            for token in tokens_b:
+                tokenized_tokens = tokenizer.tokenize(token)
+                if len(tokens) + len(tokenized_tokens) >= max_seq_length - 1:
+                    break
+                tokens.extend(tokenized_tokens)
+                orig_to_tok_map.append(len(tokens)-1)
+                segment_ids.extend([1]*len(tokenized_tokens))
+            if tokens[-1] != '[SEP]' and len(tokens) <= max_seq_length - 1:
+                tokens.append("[SEP]")
+                segment_ids.append(1)
+                orig_to_tok_map.append(len(tokens)-1)
+
+        input_ids = tokenizer.convert_tokens_to_ids(tokens)
 
         # mask to keep track of the beginning of each sub-word piece
         sub_word_masks = [0 if t.startswith('##') else 1 for t in tokens]
-
-        input_ids = tokenizer.convert_tokens_to_ids(tokens)
 
         # The mask has 1 for real tokens and 0 for padding tokens. Only real
         # tokens are attended to.
         input_mask = [1] * len(input_ids)
 
-        # Zero-pad up to the sequence length.
+        assert len(input_ids) == len(segment_ids) == len(input_mask) == len(sub_word_masks)
+
+        # pad up or cut to the sequence length
         zero_padding = [0] * (max_seq_length - len(input_ids))
         one_padding = [1] * (max_seq_length - len(input_ids))
+        minus_one_padding = [-1] * (max_seq_length - len(orig_to_tok_map))
         input_ids += zero_padding
         input_mask += zero_padding
         segment_ids += zero_padding
         sub_word_masks += one_padding
+        orig_to_tok_map += minus_one_padding
 
         assert len(input_ids) == max_seq_length
         assert len(input_mask) == max_seq_length
         assert len(segment_ids) == max_seq_length
         assert len(sub_word_masks) == max_seq_length
+        assert len(orig_to_tok_map) == max_seq_length
 
         if label_map:
             if example.label:
@@ -797,7 +834,6 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
                 label_id = None
 
         guid = example.guid
-
         if ex_index < 5:
             logger.info("*** Example ***")
             logger.info("guid: %s" % (example.guid))
@@ -810,14 +846,15 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             if example.label is not None:
                 logger.info("label: %s (id = %d)" % (example.label, label_id))
 
-        features.append(
-            InputFeatures(guid=guid,
-                          input_ids=input_ids,
-                          input_mask=input_mask,
-                          segment_ids=segment_ids,
-                          sub_word_masks=sub_word_masks,
-                          label_id=label_id))
-    return features
+        if example.parsed_a:
+            if example.parsed_b and not single_sentence:
+                token_tags.append((example.parsed_a, example.parsed_b))
+            else:
+                token_tags.append((example.parsed_a,))
+
+        features.append(InputFeatures(guid, input_ids, input_mask, segment_ids, sub_word_masks, orig_to_tok_map, label_id))
+
+    return features, token_tags
 
 
 def convert_multi_examples_to_features(examples, label_list, max_seq_length, tokenizer):

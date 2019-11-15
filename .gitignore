@@ -18,8 +18,11 @@ run.sh
 yamls
 predictions/
 scripts/
+workdir/
 pytorch_model_*
 workdir/
+*plot*
+*.png
 
 # Distribution / packaging
 .Python

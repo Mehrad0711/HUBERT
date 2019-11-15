@@ -29,7 +29,7 @@ def predict(args, model, test_dataloader, all_guids, device, task_type):
             label_ids = label_ids.to(device)
 
         with torch.no_grad():
-            logits, _ = model(input_ids, segment_ids, input_mask, sub_word_masks)
+            logits, _, _ = model(input_ids, segment_ids, input_mask, sub_word_masks)
 
         logits = logits.detach().cpu().numpy()
 

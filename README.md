@@ -33,11 +33,6 @@ better transfer among NLP tasks.
 
 ### Train and test model
 
-<!-- 	```console
-	python3 ./data/HANS/evaluate_heur_output.py ./predictions/test_predictions.txt
-	```
- -->
-
 1. Training</br>
 	```console
 	python3 run_model.py --task_name $task --encoder $encoder --data_dir ./data/ --bert_model bert-base-uncased --do_train True --do_eval False --do_test False --output_dir ./results/ --train_batch_size 256 --num_train_epochs 10
@@ -68,6 +63,7 @@ you should get ~84% accuracy on MNLI matched dev set.
 	
 
 3. To evaluate your models on HANS, first run this command to generate the predictions:</br>
+
 	```console
 	python3 run_model.py --task_name HANS --data_dir ./data/ --bert_model bert-base-uncased --do_test True --load_ckpt ./final_results/QQP/pytorch_model_best.bin --eval_batch_size 512 --output_dir ./predictions/
 	```

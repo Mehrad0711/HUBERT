@@ -7,7 +7,7 @@ from modules.transformers import TransformerEncoderLayer
 class RNNencoder(nn.Module):
     def __init__(self, encoder_args):
         """
-        RNN encoder on the top of sequences in bert.
+        RNN encoder
         """
         super(RNNencoder, self).__init__()
 
@@ -65,7 +65,7 @@ class RNNencoder(nn.Module):
 class TPRencoder_lstm(nn.Module):
     def __init__(self, encoder_args):
         """
-        TPR encoder on the top of sequences in bert.
+        TPR-LSTM encoder
         """
         for a in encoder_args.keys():
             setattr(self, a, encoder_args[a])
@@ -224,7 +224,7 @@ class TPRencoder_lstm(nn.Module):
 class TPRencoder_transformers(nn.Module):
     def __init__(self, encoder_args):
         """
-        TPR encoder on the top of sequences in bert.
+        TPR_Transformer encoder
         """
         super(TPRencoder_transformers, self).__init__()
 
@@ -233,6 +233,11 @@ class TPRencoder_transformers(nn.Module):
 
         self.enc_aF = TransformerEncoderLayer(self.in_dim, self.num_heads, self.num_hid, self.dropout)
         self.enc_aR = TransformerEncoderLayer(self.in_dim, self.num_heads, self.num_hid, self.dropout)
+        if self.extra_layers != 0:
+            self.T_list = nn.ModuleList([TransformerEncoderLayer(self.dRoles * self.dSymbols, self.num_heads, self.dRoles * self.dSymbols, self.dropout) for _ in range(self.extra_layers)])
+            self.scale = nn.Parameter(torch.tensor(self.scale_val, dtype=self.get_dtype()), requires_grad=self.train_scale)
+            print('self.scale requires grad is: {}'.format(self.scale.requires_grad))
+
         self.F = nn.Linear(self.nSymbols, self.dSymbols)
 
         if self.fixed_Role:
@@ -275,6 +280,11 @@ class TPRencoder_transformers(nn.Module):
         else:
             itemR = aR
         T = torch.einsum('tbf,tbr->tbfr', [itemF, itemR]).view(seq, batch, -1)
+
+        for i in range(self.extra_layers):
+            T = T * self.scale
+            T = self.T_list[i](T, src_mask=src_mask, src_key_padding_mask=src_key_padding_mask)
+
         final_T = T.transpose(0, 1)
 
         return final_T, aF.transpose(0, 1), aR.transpose(0, 1)

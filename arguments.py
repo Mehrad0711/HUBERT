@@ -142,11 +142,11 @@ def define_args():
                         type=int,
                         help="# of roles")
     parser.add_argument("--dSymbols",
-                        default=30,
+                        default=32,
                         type=int,
                         help="embedding size of symbols")
     parser.add_argument("--dRoles",
-                        default=30,
+                        default=32,
                         type=int,
                         help="embedding size of roles")
     parser.add_argument("--temperature",
@@ -181,10 +181,22 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help="Load bert parameters from checkpoint")
+    parser.add_argument("--load_role_selector",
+                        type=str2bool,
+                        default=False,
+                        help="Load Role selector neural network from checkpoint")
+    parser.add_argument("--load_filler_selector",
+                        type=str2bool,
+                        default=False,
+                        help="Load Filler selector neural network from checkpoint")
     parser.add_argument("--load_classifier",
                         type=str2bool,
                         default=False,
                         help="Load classifier parameters from checkpoint")
+    parser.add_argument("--load_LSTM_params",
+                        type=str2bool,
+                        default=False,
+                        help='load LSTM weight and biases')
     parser.add_argument("--fixed_Role",
                         type=str2bool,
                         default=False,
@@ -193,7 +205,31 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help='whether to delete the result directory if it already exists')
-    parser.add_argument("--freeze_mat",
+    parser.add_argument("--freeze_role",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role matrices after loading from a trained model')
+    parser.add_argument("--freeze_filler",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Filler matrices after loading from a trained model')
+    parser.add_argument("--freeze_role_selector",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role networks after loading from a trained model')
+    parser.add_argument("--freeze_filler_selector",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Filler networks after loading from a trained model')
+    parser.add_argument("--freeze_bert_params",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
+    parser.add_argument("--freeze_classifier",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
+    parser.add_argument("--freeze_LSTM_params",
                         type=str2bool,
                         default=False,
                         help='whether to freeze Role/ Filler matrices after loading from a trained model')
@@ -235,6 +271,10 @@ def define_args():
                         type=int,
                         default=1,
                         help='number of layers for recurrent network')
+    parser.add_argument("--num_extra_layers",
+                        type=int,
+                        default=0,
+                        help='number of extra transformer layers for tpr_transformer network')
     parser.add_argument("--num_heads",
                         type=int,
                         default=8,
@@ -256,10 +296,6 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help='decay scale values')
-    parser.add_argument("--load_LSTM_params",
-                        type=str2bool,
-                        default=False,
-                        help='load LSTM weight and biases')
     parser.add_argument("--save_best_only",
                         type=str2bool,
                         default=True,
@@ -272,7 +308,57 @@ def define_args():
                         type=str,
                         default='v1',
                         help='which classifier to use')
-
+    parser.add_argument("--replace_filler",
+                        type=str2bool,
+                        default=False,
+                        help='when evaluating a model on previous task (in continual learning settings),'
+                             ' replace filler weights with previous values')
+    parser.add_argument("--replace_role",
+                        type=str2bool,
+                        default=False,
+                        help='when evaluating a model on previous task (in continual learning settings),'
+                             ' replace role weights with previous values')
+    parser.add_argument("--replace_filler_selector",
+                        type=str2bool,
+                        default=False,
+                        help='when evaluating a model on previous task (in continual learning settings),'
+                             ' replace filler selector weights with previous values')
+    parser.add_argument("--replace_role_selector",
+                        type=str2bool,
+                        default=False,
+                        help='when evaluating a model on previous task (in continual learning settings),'
+                             ' replace role selector weights with previous values')
+    parser.add_argument("--reset_temp_ratio",
+                        type=float,
+                        default=1.0,
+                        help='set temperature to a smaller value during evaluation and testing')
+    # attention arguments
+    parser.add_argument("--save_tpr_attentions",
+                        type=str2bool,
+                        default=False,
+                        help='save aFs and aRs')
+    parser.add_argument("--save_strategy",
+                        type=str,
+                        default='top',
+                        help='method to retrieve tpr attention values',
+                        choices=['topK', 'sample', 'pickK'])
+    parser.add_argument("--data_split_attention",
+                        type=str,
+                        default='dev',
+                        choices=['train', 'dev', 'test'],
+                        help='which split of data to choose for saving aFs and aRs attentions')
+    parser.add_argument("--single_sentence",
+                        type=str2bool,
+                        default=False,
+                        help='omit hypothesis for paired-input tasks')
+    parser.add_argument("--K",
+                        type=int,
+                        default=1,
+                        help='choose K biggest value from tpr attentions')
+    parser.add_argument("--get_POS",
+                        type=str2bool,
+                        default=False,
+                        help='get POS tags for tokens')
 
     args = parser.parse_args()
 
