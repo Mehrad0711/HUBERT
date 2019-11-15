@@ -141,7 +141,7 @@ def main(args):
                 raise ValueError("Task not found: %s" % (task.lower()))
             logger.info('*** Start training for {} ***'.format(task))
 
-            processor = PROCESSORS[task.lower()](args.num_ex)
+            processor = PROCESSORS[task.lower()](args.num_ex, False)
             num_labels = NUM_LABELS_TASK[task.lower()]
             task_type = TASK_TYPE[task.lower()]
             label_list = None
@@ -160,7 +160,7 @@ def main(args):
 
             if args.do_eval:
                 # prepare eval data
-                eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='dev')
+                eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='dev')[0]
 
             # Prepare model
             opt = {'bidirect': args.bidirect, 'sub_word_masking': args.sub_word_masking, 'nRoles': args.nRoles, 'nSymbols': args.nSymbols,
@@ -185,14 +185,14 @@ def main(args):
             best_eval_accuracy = -float('inf')
             best_model = None
 
-            train_dataloader = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='train')
+            train_dataloader = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='train')[0]
 
             for epoch in trange(int(args.num_train_epochs), desc="Epoch"):
                 model.train()
                 tr_loss = 0
                 nb_tr_examples, nb_tr_steps = 0, 0
                 for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
-                    batch = tuple(t.to(device) for t in batch)
+                    batch = tuple(t.to(device) if isinstance(t, torch.Tensor) else t for t in batch)
                     input_ids, input_mask, segment_ids, sub_word_masks, orig_to_token_maps, label_ids = batch
                     _, loss, _ = model(input_ids, segment_ids, input_mask, sub_word_masks, label_ids)
                     if n_gpu > 1:
@@ -306,7 +306,7 @@ def main(args):
                         label_list = processor.get_labels()
                     pre.num_labels = num_labels
                     pre.task_type = task_type
-                    eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, dev_task, tokenizer, split='dev')
+                    eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, dev_task, tokenizer, split='dev')[0]
 
                     result, _ = evaluate(args, best_model, eval_dataloader, device, task_type)
                     logger.info("train_task: {}, eval_task: {}".format(task, dev_task))

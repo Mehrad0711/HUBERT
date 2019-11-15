@@ -5,6 +5,7 @@ import os
 from collections import defaultdict
 import nltk
 import re
+nltk.download('punkt')
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
@@ -74,8 +75,9 @@ class MultiInputFeatures(object):
 class DataProcessor(object):
     """Base class for data converters for sequence classification data sets."""
 
-    def __init__(self, num_ex):
+    def __init__(self, num_ex, pos_tags):
         self.num_ex = num_ex
+        self.pos_tags = pos_tags
 
     def get_train_examples(self, data_dir):
         """Gets a collection of `InputExample`s for the train set."""
@@ -117,8 +119,8 @@ class DataProcessor(object):
 class NLIProcessor(DataProcessor):
     """Processor for the general NLI data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(NLIProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(NLIProcessor, self).__init__(num_ex, pos_tags)
         self.data = defaultdict()
         # self.metadata = defaultdict()
 
@@ -158,8 +160,8 @@ class NLIProcessor(DataProcessor):
 class ACCProcessor(DataProcessor):
     """Processor for the ... data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(ACCProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(ACCProcessor, self).__init__(num_ex, pos_tags)
         self.data = defaultdict()
         # self.metadata = defaultdict()
 
@@ -201,9 +203,8 @@ class ACCProcessor(DataProcessor):
 class SNLIProcessor(DataProcessor):
     """Processor for the SNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags=False):
-        self.pos_tags = pos_tags
-        super(SNLIProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(SNLIProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -251,8 +252,8 @@ class SNLIProcessor(DataProcessor):
 class HANSProcessor(DataProcessor):
     """Processor for the HANS data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(HANSProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(HANSProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -292,9 +293,8 @@ class HANSProcessor(DataProcessor):
 class MNLIProcessor(DataProcessor):
     """Processor for the MNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags=False):
-        self.pos_tags = pos_tags
-        super(MNLIProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(MNLIProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -344,8 +344,8 @@ class MNLIProcessor(DataProcessor):
 class MRPCProcessor(DataProcessor):
     """Processor for the MRPC data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(MRPCProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(MRPCProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -386,8 +386,8 @@ class MRPCProcessor(DataProcessor):
 class QNLIProcessor(DataProcessor):
     """Processor for the QNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(QNLIProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(QNLIProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -428,8 +428,8 @@ class QNLIProcessor(DataProcessor):
 class QQPProcessor(DataProcessor):
     """Processor for the QQP data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(QQPProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(QQPProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -475,8 +475,8 @@ class QQPProcessor(DataProcessor):
 class RTEProcessor(DataProcessor):
     """Processor for the RTE data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(RTEProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(RTEProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -520,8 +520,8 @@ class RTEProcessor(DataProcessor):
 class WNLIProcessor(DataProcessor):
     """Processor for the WNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(WNLIProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(WNLIProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -566,8 +566,8 @@ class WNLIProcessor(DataProcessor):
 class SSTProcessor(DataProcessor):
     """Processor for the SST data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(SSTProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(SSTProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -611,8 +611,8 @@ class SSTProcessor(DataProcessor):
 class STSProcessor(DataProcessor):
     """Processor for the STS data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(STSProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(STSProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -657,8 +657,8 @@ class STSProcessor(DataProcessor):
 class COLAProcessor(DataProcessor):
     """Processor for the CoLA data set (GLUE version)."""
 
-    def __init__(self, num_ex):
-        super(COLAProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(COLAProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -702,8 +702,8 @@ class COLAProcessor(DataProcessor):
 class COPAProcessor(DataProcessor):
     """Processor for the COPA data set (SuperGLUE version)."""
 
-    def __init__(self, num_ex):
-        super(COPAProcessor, self).__init__(num_ex)
+    def __init__(self, num_ex, pos_tags):
+        super(COPAProcessor, self).__init__(num_ex, pos_tags)
 
     def get_train_examples(self, data_dir):
         """See base class."""
