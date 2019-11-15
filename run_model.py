@@ -402,8 +402,19 @@ def main(args):
         if args.save_tpr_attentions:
             output_attention_file = os.path.join(*[args.output_dir, eval_task_name, "tpr_attention.txt"])
             vals = {}
-            tags = [[subval.split()[0][1:] for subval in val[0]] for val in token_tags]
-            tokens = [[subval.split()[1][:-1] for subval in val[0]] for val in token_tags]
+            if args.single_sentence:
+                tags = [[subval.split()[0][1:] for subval in val[0]] for val in token_tags]
+                tokens = [[subval.split()[1][:-1] for subval in val[0]] for val in token_tags]
+            else:
+                tags = []
+                tokens = []
+                tags_a = [[subval.split()[0][1:] for subval in val[0]] for val in token_tags]
+                tokens_a = [[subval.split()[1][:-1] for subval in val[0]] for val in token_tags]
+                tags_b = [[subval.split()[0][1:] for subval in val[1]] for val in token_tags]
+                tokens_b = [[subval.split()[1][:-1] for subval in val[1]] for val in token_tags]
+                for tag_a, tag_b, token_a, token_b in zip(tags_a, tags_b, tokens_a, tokens_b):
+                    tags.append(tag_a + ['SEP'] + tag_b)
+                    tokens.append(token_a + ['[SEP]'] + token_b)
             bad_sents_count = 0
             for i in range(len(all_ids)):
                 try:

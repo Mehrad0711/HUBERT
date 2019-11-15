@@ -201,7 +201,8 @@ class ACCProcessor(DataProcessor):
 class SNLIProcessor(DataProcessor):
     """Processor for the SNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex):
+    def __init__(self, num_ex, pos_tags=False):
+        self.pos_tags = pos_tags
         super(SNLIProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
@@ -236,8 +237,15 @@ class SNLIProcessor(DataProcessor):
                 label = line[-1]
             else:
                 label = line[-1]
+
+            text_a_parsed = None
+            text_b_parsed = None
+            if self.pos_tags:
+                text_a_parsed = re.findall(r'\([^\)\(]*\)', line[6])
+                text_b_parsed = re.findall(r'\([^\)\(]*\)', line[7])
+
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
 
 class HANSProcessor(DataProcessor):

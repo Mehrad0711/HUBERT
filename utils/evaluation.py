@@ -53,6 +53,8 @@ def evaluate(args, model, eval_dataloader, device, task_type, global_step=None, 
             elif args.save_strategy == 'top':
                 F_selected = torch.topk(aFs, k=args.K, dim=-1)[1] # choose indices
                 R_selected = torch.topk(aRs, k=args.K, dim=-1)[1] # choose indices
+                # F_selected = torch.topk(aFs, k=args.K, dim=-1)[1][:,:,[-1]] # choose indices
+                # R_selected = torch.topk(aRs, k=args.K, dim=-1)[1][:,:,[-1]] # choose indices
                 for i, (input_F, input_R) in enumerate(zip(F_selected, R_selected)):
                     map = orig_to_token_maps[i]
                     index = map.tolist().index(-1)

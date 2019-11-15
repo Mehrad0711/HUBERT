@@ -142,11 +142,11 @@ def define_args():
                         type=int,
                         help="# of roles")
     parser.add_argument("--dSymbols",
-                        default=30,
+                        default=32,
                         type=int,
                         help="embedding size of symbols")
     parser.add_argument("--dRoles",
-                        default=30,
+                        default=32,
                         type=int,
                         help="embedding size of roles")
     parser.add_argument("--temperature",
@@ -341,7 +341,7 @@ def define_args():
                         type=str,
                         default='top',
                         help='method to retrieve tpr attention values',
-                        choices=['top', 'sample'])
+                        choices=['topK', 'sample', 'pickK'])
     parser.add_argument("--data_split_attention",
                         type=str,
                         default='dev',

@@ -50,7 +50,7 @@ def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer,
             all_label_ids = torch.tensor([f.label_id for f in features], dtype=torch.float32)
         data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_sub_word_masks, all_orig_to_token_maps, all_label_ids)
 
-    if split == 'train':
+    if split == 'train' and not args.save_tpr_attentions:
         if args.local_rank == -1:
             sampler = RandomSampler(data)
         else:
