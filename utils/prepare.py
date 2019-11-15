@@ -60,7 +60,6 @@ def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer,
 
     dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
 
-
     return_vals = [dataloader]
     if split == 'test':
         all_guids = [f.guid for f in features]

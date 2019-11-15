@@ -15,7 +15,7 @@ function delete {
 # tests begin here
 i=0
 
-for encoder in tpr_transformers tpr_lstm lstm no_enc ; do
+for encoder in tpr_transformers no_enc ; do
 
 	# train on two tasks consecutively
 	python3 run_model.py --no_cuda True --task_name SNLI --cont_task_names SST  --encoder $encoder --data_dir $CODEDIR/tests/sample_data/ --bert_model bert-base-uncased --do_train True --do_eval True --do_test False --output_dir $WORKDIR/continual_training/ --dSymbols 30 --dRoles 30 --nSymbols 50 --nRoles 35 --train_batch_size 1 --num_train_epochs 2 --num_bert_layers 1 --delete_ok True
