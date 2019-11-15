@@ -24,6 +24,8 @@ import shutil
 import logging
 import os
 import sys
+import json
+import pickle
 
 import numpy as np
 import torch
@@ -39,11 +41,11 @@ from utils.tasks import PROCESSORS, NUM_LABELS_TASK, TASK_TYPE
 from modules.model import BertForSequenceClassification_tpr
 from utils.evaluation import evaluate
 from utils.prediction import predict
-from utils.prepare import prepare_data_loader, prepare_model, prepare_optim
+from utils.prepare import prepare_data_loader, prepare_model, prepare_optim, modify_model
 
 import warnings
 warnings.simplefilter("ignore", UserWarning)
-
+warnings.simplefilter("ignore", FutureWarning)
 
 def decay(value, mode, final_ratio, global_step, t_total):
     assert final_ratio <= 1.0
@@ -90,7 +92,10 @@ def main(args):
             logger.warning('changing Role dimension from {} to {} to match number of Roles'.format(args.dRoles, args.nRoles))
             setattr(args, 'dRoles', args.nRoles)
 
-    if args.local_rank == -1 or args.no_cuda:
+    if args.no_cuda:
+        device = torch.device("cpu")
+        n_gpu = 0
+    elif args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
         n_gpu = torch.cuda.device_count()
     else:
@@ -99,6 +104,8 @@ def main(args):
         n_gpu = 1
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.distributed.init_process_group(backend='nccl')
+    args.device = device
+    args.n_gpu = n_gpu
     logger.info("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
         device, n_gpu, bool(args.local_rank != -1), args.fp16))
 
@@ -139,7 +146,7 @@ def main(args):
                 raise ValueError("Task not found: %s" % (task.lower()))
             logger.info('*** Start training for {} ***'.format(task))
 
-            processor = PROCESSORS[task.lower()](args.num_ex)
+            processor = PROCESSORS[task.lower()](args.num_ex, False)
             num_labels = NUM_LABELS_TASK[task.lower()]
             task_type = TASK_TYPE[task.lower()]
             label_list = None
@@ -158,7 +165,7 @@ def main(args):
 
             if args.do_eval:
                 # prepare eval data
-                eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='dev')
+                eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='dev')[0]
 
             # Prepare model
             opt = {'bidirect': args.bidirect, 'sub_word_masking': args.sub_word_masking, 'nRoles': args.nRoles, 'nSymbols': args.nSymbols,
@@ -183,7 +190,7 @@ def main(args):
             best_eval_accuracy = -float('inf')
             best_model = None
 
-            train_dataloader = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='train')
+            train_dataloader = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='train')[0]
 
             for epoch in trange(int(args.num_train_epochs), desc="Epoch"):
                 model.train()
@@ -191,8 +198,8 @@ def main(args):
                 nb_tr_examples, nb_tr_steps = 0, 0
                 for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                     batch = tuple(t.to(device) for t in batch)
-                    input_ids, input_mask, segment_ids, sub_word_masks, label_ids = batch
-                    _, loss = model(input_ids, segment_ids, input_mask, sub_word_masks, label_ids)
+                    input_ids, input_mask, segment_ids, sub_word_masks, orig_to_token_maps, label_ids = batch
+                    _, loss, _ = model(input_ids, segment_ids, input_mask, sub_word_masks, label_ids)
                     if n_gpu > 1:
                         loss = loss.mean()  # mean() to average on multi-gpu.
                     if args.gradient_accumulation_steps > 1:
@@ -258,7 +265,7 @@ def main(args):
                 if args.do_eval:
                     # evaluate model after every epoch
                     model.eval()
-                    result = evaluate(args, model, eval_dataloader, device, task_type, global_step, tr_loss, nb_tr_steps)
+                    result, _ = evaluate(args, model, eval_dataloader, device, task_type, global_step, tr_loss, nb_tr_steps)
                     for key in sorted(result.keys()):
                         if key == 'eval_loss':
                             tensorboard_writer.add_scalar('eval/loss', result[key], global_step)
@@ -276,7 +283,6 @@ def main(args):
                         logger.info("Saving checkpoint pytorch_model_best.bin to {}".format(output_model_file))
                         torch.save({'state_dict': model_to_save.state_dict(), 'options': opt, 'bert_config': bert_config}, output_model_file)
 
-
             if args.do_prev_eval:
                 if best_model is None:
                     best_model = model
@@ -284,7 +290,7 @@ def main(args):
 
                 # evaluate best model on current task
                 dev_task = task
-                result = evaluate(args, best_model, eval_dataloader, device, task_type)
+                result, _ = evaluate(args, best_model, eval_dataloader, device, task_type)
                 logger.info("train_task: {}, eval_task: {}".format(task, dev_task))
                 for key in sorted(result.keys()):
                     logger.info("  %s = %s", key, str(result[key]))
@@ -294,28 +300,8 @@ def main(args):
                 for j in range(i):
                     dev_task = all_tasks[j]
 
-                    # load previous task best-model classifier (and possibly other parameters)
-                    prev_model = torch.load(os.path.join(*[args.output_dir, dev_task, "pytorch_model_best.bin"]))
-
                     with torch.no_grad():
-                        pre.classifier.weight.set_(prev_model['state_dict']['classifier.weight'])
-                        pre.classifier.bias.set_(prev_model['state_dict']['classifier.bias'])
-                        if args.replace_filler:
-                            pre.head.F.weight.set_(prev_model['state_dict']['head.F.weight'])
-                            pre.head.F.bias.set_(prev_model['state_dict']['head.F.bias'])
-                        if args.replace_role:
-                            pre.head.R.weight.set_(prev_model['state_dict']['head.R.weight'])
-                            pre.head.R.bias.set_(prev_model['state_dict']['head.R.bias'])
-                        if args.replace_filler_selector:
-                            pre.head.enc_aF.weight.set_(prev_model['state_dict']['head.enc_aF.weight'])
-                            pre.head.enc_aF.bias.set_(prev_model['state_dict']['head.enc_aF.bias'])
-                            pre.head.WaF.weight.set_(prev_model['state_dict']['head.WaF.weight'])
-                            pre.head.WaF.bias.set_(prev_model['state_dict']['head.WaF.bias'])
-                        if args.replace_role_selector:
-                            pre.head.enc_aR.weight.set_(prev_model['state_dict']['head.enc_aR.weight'])
-                            pre.head.enc_aR.bias.set_(prev_model['state_dict']['head.enc_aR.bias'])
-                            pre.head.WaR.weight.set_(prev_model['state_dict']['head.WaR.weight'])
-                            pre.head.WaR.bias.set_(prev_model['state_dict']['head.WaR.bias'])
+                        modify_model(best_model, dev_task, args)
 
                     processor = PROCESSORS[dev_task.lower()](args.num_ex)
                     num_labels = NUM_LABELS_TASK[dev_task.lower()]
@@ -325,9 +311,9 @@ def main(args):
                         label_list = processor.get_labels()
                     pre.num_labels = num_labels
                     pre.task_type = task_type
-                    eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, dev_task, tokenizer, split='dev')
+                    eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, dev_task, tokenizer, split='dev')[0]
 
-                    result = evaluate(args, best_model, eval_dataloader, device, task_type)
+                    result, _ = evaluate(args, best_model, eval_dataloader, device, task_type)
                     logger.info("train_task: {}, eval_task: {}".format(task, dev_task))
                     for key in sorted(result.keys()):
                         logger.info("  %s = %s", key, str(result[key]))
@@ -340,7 +326,8 @@ def main(args):
 
         eval_task_name = all_tasks[-1]
         logger.info('*** Start evaluating for {} ***'.format(eval_task_name))
-        processor = PROCESSORS[eval_task_name.lower()](args.num_ex)
+        return_tags = args.save_tpr_attentions
+        processor = PROCESSORS[eval_task_name.lower()](args.num_ex, return_tags)
         num_labels = NUM_LABELS_TASK[eval_task_name.lower()]
         task_type = TASK_TYPE[eval_task_name.lower()]
         label_list = None
@@ -354,17 +341,36 @@ def main(args):
             output_model_file = os.path.join(args.load_ckpt)
 
         #prepare data
-        eval_dataloader = prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer, split='dev')
+        split = args.data_split_attention if args.save_tpr_attentions else 'dev'
+
+        return_vals = prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer,
+                                              split=split, single_sentence=args.single_sentence, return_tags=return_tags)
+        if len(return_vals) == 1:
+            eval_dataloader = return_vals[0]
+        elif len(return_vals) == 2 and args.save_tpr_attentions:
+            eval_dataloader, token_tags = return_vals
+        elif len(return_vals) == 2 and split == 'test':
+            eval_dataloader, all_guids = return_vals
+        else:
+            eval_dataloader, all_guids, token_tags = return_vals
+
+        # tags = []
+        # if args.get_POS:
+        #
+        #     from nltk.tag import StanfordPOSTagger
+        #     pos_tagger = StanfordPOSTagger(args.stanford_model, args.stanford_jar, encoding='utf8')
+        #     for input_ids, input_mask, segment_ids, sub_word_masks, orig_to_token_maps, label_ids in tqdm(eval_dataloader, desc="tagging"):
+        #         tags[input_ids] = pos_tagger.tag(input_ids)
+        #
 
         states = torch.load(output_model_file, map_location=device)
         model_state_dict = states['state_dict']
         opt = states['options']
         if 'nRoles' not in opt:
-            print(args.nRoles)
             for val in ['nRoles', 'nSymbols', 'dRoles', 'dSymbols']:
                 opt[val] = getattr(args, val)
-        bert_config = states['bert_config']
 
+        bert_config = states['bert_config']
         if not isinstance(bert_config, PretrainedConfig):
             bert_dict = bert_config.to_dict()
             bert_dict['layer_norm_eps'] = 1e-12
@@ -385,12 +391,49 @@ def main(args):
                                                   **opt)
 
         model.load_state_dict(model_state_dict, strict=True)
+
+        if args.reset_temp_ratio != 1.0 and hasattr(model.head, 'temperature'):
+            new_temp = model.head.temperature / args.reset_temp_ratio
+            model.head.temperature = new_temp
+
         model.to(device)
         model.eval()
-        result = evaluate(args, model, eval_dataloader, device, task_type)
+        result, (all_ids, F_list, R_list) = evaluate(args, model, eval_dataloader, device, task_type,
+                                                     data_split=split, save_tpr_attentions=args.save_tpr_attentions)
 
         if not os.path.exists(os.path.join(args.output_dir, eval_task_name)):
             os.makedirs(os.path.join(args.output_dir, eval_task_name))
+
+        if args.save_tpr_attentions:
+            output_attention_file = os.path.join(*[args.output_dir, eval_task_name, "tpr_attention.txt"])
+            vals = {}
+            if args.single_sentence:
+                tags = [[subval.split()[0][1:] for subval in val[0]] for val in token_tags]
+                tokens = [[subval.split()[1][:-1] for subval in val[0]] for val in token_tags]
+            else:
+                tags = []
+                tokens = []
+                tags_a = [[subval.split()[0][1:] for subval in val[0]] for val in token_tags]
+                tokens_a = [[subval.split()[1][:-1] for subval in val[0]] for val in token_tags]
+                tags_b = [[subval.split()[0][1:] for subval in val[1]] for val in token_tags]
+                tokens_b = [[subval.split()[1][:-1] for subval in val[1]] for val in token_tags]
+                for tag_a, tag_b, token_a, token_b in zip(tags_a, tags_b, tokens_a, tokens_b):
+                    tags.append(tag_a + ['SEP'] + tag_b)
+                    tokens.append(token_a + ['[SEP]'] + token_b)
+            bad_sents_count = 0
+            for i in range(len(all_ids)):
+                try:
+                    assert len(tokens[i]) == len(tags[i]) == len(F_list[i]) == len(R_list[i])
+                    vals[all_ids[i]] = {'all_aFs': F_list[i], 'all_aRs': R_list[i], 'tokens': tokens[i], 'tags': tags[i]}
+                except:
+                    # import pdb; pdb.set_trace()
+                    bad_sents_count += 1
+            logger.info('Could not parse {} sentences out of all {} data points'.format(bad_sents_count, len(all_ids)))
+
+            logger.info('saving tpr_attentions to {} '.format(output_attention_file))
+            with open(output_attention_file, "w") as fp:
+                json.dump(vals, fp)
+
         output_eval_file = os.path.join(*[args.output_dir, eval_task_name, "eval_results.txt"])
         logger.info("***** Eval results *****")
         logger.info("  eval output file is in {}".format(output_eval_file))
@@ -407,7 +450,7 @@ def main(args):
 
         test_task_name = all_tasks[-1]
         logger.info('*** Start testing for {} ***'.format(test_task_name))
-        processor = PROCESSORS[test_task_name.lower()](args.num_ex)
+        processor = PROCESSORS[test_task_name.lower()](args.num_ex, False)
         num_labels = NUM_LABELS_TASK[test_task_name.lower()]
         task_type = TASK_TYPE[test_task_name.lower()]
         label_list = None
@@ -452,6 +495,10 @@ def main(args):
         model.load_state_dict(model_state_dict, strict=True)
         model.to(device)
         model.eval()
+
+        if args.reset_temp_ratio != 1.0 and hasattr(model.head, 'temperature'):
+            new_temp = model.head.temperature / args.reset_temp_ratio
+            model.head.temperature = new_temp
 
         if test_task_name.lower().startswith('dnc'):
             test_examples = processor.get_all_examples(args.data_dir)

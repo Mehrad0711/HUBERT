@@ -41,7 +41,7 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
 
         # self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.num_layers = kwargs['num_rnn_layers']
-        self.extra_layers = kwargs['num_extra_layers']
+        self.extra_layers = kwargs.get('num_extra_layers', 0)
         self.num_directs = 1 + int(kwargs['bidirect'])
         self.cls = kwargs.get('cls', 'v1')
         self.encoder = kwargs['encoder']
@@ -76,7 +76,7 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
         if self.aggregate == 'concat':
             self.proj = nn.Linear(max_seq_len * hidden_dimension, hidden_dimension)
 
-        # define the encoder and aggregation layer
+        # define the encoder
         if self.encoder == 'lstm':
             encoder_args = {'in_dim': hidden_size, 'num_hid': hidden_size, 'nlayers': self.num_layers,
                             'dropout': 0.0, 'bidirect': kwargs['bidirect'], 'rnn_type': 'LSTM'}
@@ -125,6 +125,8 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
 
         batch_size = input_ids.size(0)
         R_loss = None
+        aFs = None
+        aRs = None
 
         sequence_output, pooled_output = self.bert(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
 
@@ -172,4 +174,4 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
                 loss = loss_fct(logits.view(-1, 1), labels.view(-1, 1))
                 total_loss = loss + self.ortho_reg * R_loss if R_loss is not None else loss
 
-        return logits, total_loss
+        return logits, total_loss, (aFs, aRs)

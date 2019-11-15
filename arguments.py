@@ -142,11 +142,11 @@ def define_args():
                         type=int,
                         help="# of roles")
     parser.add_argument("--dSymbols",
-                        default=30,
+                        default=32,
                         type=int,
                         help="embedding size of symbols")
     parser.add_argument("--dRoles",
-                        default=30,
+                        default=32,
                         type=int,
                         help="embedding size of roles")
     parser.add_argument("--temperature",
@@ -328,7 +328,37 @@ def define_args():
                         default=False,
                         help='when evaluating a model on previous task (in continual learning settings),'
                              ' replace role selector weights with previous values')
-
+    parser.add_argument("--reset_temp_ratio",
+                        type=float,
+                        default=1.0,
+                        help='set temperature to a smaller value during evaluation and testing')
+    # attention arguments
+    parser.add_argument("--save_tpr_attentions",
+                        type=str2bool,
+                        default=False,
+                        help='save aFs and aRs')
+    parser.add_argument("--save_strategy",
+                        type=str,
+                        default='top',
+                        help='method to retrieve tpr attention values',
+                        choices=['topK', 'sample', 'pickK'])
+    parser.add_argument("--data_split_attention",
+                        type=str,
+                        default='dev',
+                        choices=['train', 'dev', 'test'],
+                        help='which split of data to choose for saving aFs and aRs attentions')
+    parser.add_argument("--single_sentence",
+                        type=str2bool,
+                        default=False,
+                        help='omit hypothesis for paired-input tasks')
+    parser.add_argument("--K",
+                        type=int,
+                        default=1,
+                        help='choose K biggest value from tpr attentions')
+    parser.add_argument("--get_POS",
+                        type=str2bool,
+                        default=False,
+                        help='get POS tags for tokens')
 
     args = parser.parse_args()
 

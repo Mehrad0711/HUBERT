@@ -8,3 +8,5 @@ sklearn
 regex
 tqdm
 boto3
+nltk
+seaborn

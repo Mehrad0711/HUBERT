@@ -233,10 +233,10 @@ class TPRencoder_transformers(nn.Module):
 
         self.enc_aF = TransformerEncoderLayer(self.in_dim, self.num_heads, self.num_hid, self.dropout)
         self.enc_aR = TransformerEncoderLayer(self.in_dim, self.num_heads, self.num_hid, self.dropout)
-
-        self.T_list = nn.ModuleList([TransformerEncoderLayer(self.dRoles * self.dSymbols, self.num_heads, self.dRoles * self.dSymbols, self.dropout) for _ in range(self.extra_layers)])
-        self.scale = nn.Parameter(torch.tensor(self.scale_val, dtype=self.get_dtype()), requires_grad=self.train_scale)
-        print('self.scale requires grad is: {}'.format(self.scale.requires_grad))
+        if self.extra_layers != 0:
+            self.T_list = nn.ModuleList([TransformerEncoderLayer(self.dRoles * self.dSymbols, self.num_heads, self.dRoles * self.dSymbols, self.dropout) for _ in range(self.extra_layers)])
+            self.scale = nn.Parameter(torch.tensor(self.scale_val, dtype=self.get_dtype()), requires_grad=self.train_scale)
+            print('self.scale requires grad is: {}'.format(self.scale.requires_grad))
 
         self.F = nn.Linear(self.nSymbols, self.dSymbols)
 
