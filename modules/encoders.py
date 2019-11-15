@@ -202,9 +202,8 @@ class TPRencoder_lstm(nn.Module):
     def call(self, x):
 
         R_flat = self.R.weight.view(self.R.weight.shape[0], -1)
-        R_loss_mat = torch.norm(torch.mm(R_flat, R_flat.t()) - torch.eye(R_flat.shape[0], dtype=R_flat.dtype, device=R_flat.device)).pow(2) +\
-                     torch.norm(torch.mm(R_flat.t(), R_flat) - torch.eye(R_flat.shape[1], dtype=R_flat.dtype, device=R_flat.device)).pow(2)
-        R_loss = torch.norm(R_loss_mat)
+        R_loss = torch.norm(torch.mm(R_flat, R_flat.t()) - torch.eye(R_flat.shape[0]).type(x.type())).pow(2) +\
+                     torch.norm(torch.mm(R_flat.t(), R_flat) - torch.eye(R_flat.shape[1]).type(x.type())).pow(2)
 
         if self.ndirections == 1:
             out, aFs, aRs = self.backward(x)
@@ -234,7 +233,8 @@ class TPRencoder_transformers(nn.Module):
         self.enc_aF = TransformerEncoderLayer(self.in_dim, self.num_heads, self.num_hid, self.dropout)
         self.enc_aR = TransformerEncoderLayer(self.in_dim, self.num_heads, self.num_hid, self.dropout)
         if self.extra_layers != 0:
-            self.T_list = nn.ModuleList([TransformerEncoderLayer(self.dRoles * self.dSymbols, self.num_heads, self.dRoles * self.dSymbols, self.dropout) for _ in range(self.extra_layers)])
+            self.T_list = nn.ModuleList([TransformerEncoderLayer(self.dRoles * self.dSymbols, self.num_heads, self.dRoles * self.dSymbols, self.dropout)
+                                         for _ in range(self.extra_layers)])
             self.scale = nn.Parameter(torch.tensor(self.scale_val, dtype=self.get_dtype()), requires_grad=self.train_scale)
             print('self.scale requires grad is: {}'.format(self.scale.requires_grad))
 
@@ -292,9 +292,8 @@ class TPRencoder_transformers(nn.Module):
     def call(self, x, src_key_padding_mask=None):
 
         R_flat = self.R.weight.view(self.R.weight.shape[0], -1)
-        R_loss_mat = torch.norm(torch.mm(R_flat, R_flat.t()) - torch.eye(R_flat.shape[0], dtype=self.get_dtype(), device=self.get_device())).pow(2) +\
-                     torch.norm(torch.mm(R_flat.t(), R_flat) - torch.eye(R_flat.shape[1], dtype=self.get_dtype(), device=self.get_device())).pow(2)
-        R_loss = torch.norm(R_loss_mat)
+        R_loss = torch.norm(torch.mm(R_flat, R_flat.t()) - torch.eye(R_flat.shape[0]).type(x.type())).pow(2) +\
+                     torch.norm(torch.mm(R_flat.t(), R_flat) - torch.eye(R_flat.shape[1]).type(x.type())).pow(2)
 
         out, aFs, aRs = self.forward(x, src_key_padding_mask)
         return out, aFs, aRs, R_loss

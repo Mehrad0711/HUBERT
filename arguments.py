@@ -303,7 +303,11 @@ def define_args():
     parser.add_argument("--ortho_reg",
                         type=float,
                         default=0.0,
-                        help='regulation for orthonormal R matrix')
+                        help='regularization coefficient for orthonormal R matrix loss')
+    parser.add_argument("--inductive_reg",
+                        type=float,
+                        default=0.0,
+                        help='regularization coefficient for inductive loss')
     parser.add_argument("--cls",
                         type=str,
                         default='v1',

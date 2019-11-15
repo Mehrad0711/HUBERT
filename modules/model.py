@@ -31,6 +31,7 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
         self.task_type = task_type
         self.sub_word_masking = kwargs['sub_word_masking']
         self.ortho_reg = kwargs.get('ortho_reg', 0.0)
+        self.inductive_reg = kwargs.get('inductive_reg', 0.0)
         self.bert = BertModel(config)
 
         nRoles, nSymbols, dRoles, dSymbols = kwargs['nRoles'], kwargs['nSymbols'], kwargs['dRoles'], kwargs['dSymbols']
@@ -164,14 +165,24 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
         logits = self.classifier(cls_input)
         total_loss = None
 
+        from utils.model_utils import inductive_bias
+
+        inductive_loss = 0.0
+        if self.inductive_reg != 0.0:
+            inductive_loss = self.inductive_reg * (inductive_bias(aFs) + inductive_bias(aRs))
+
         if labels is not None:
             if self.task_type == 0:
                 loss_fct = nn.CrossEntropyLoss()
                 loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-                total_loss = loss + self.ortho_reg * R_loss if R_loss is not None else loss
+                orig_loss = loss
+                R_loss = self.ortho_reg * R_loss if R_loss is not None else 0.0
+                total_loss = orig_loss + R_loss + inductive_loss
             else:
                 loss_fct = nn.MSELoss()
                 loss = loss_fct(logits.view(-1, 1), labels.view(-1, 1))
-                total_loss = loss + self.ortho_reg * R_loss if R_loss is not None else loss
+                orig_loss = loss
+                R_loss = self.ortho_reg * R_loss if R_loss is not None else 0.0
+                total_loss = orig_loss + R_loss + inductive_loss
 
         return logits, total_loss, (aFs, aRs)
