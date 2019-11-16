@@ -25,7 +25,6 @@ import logging
 import os
 import sys
 import json
-import pickle
 
 import numpy as np
 import torch
@@ -41,7 +40,8 @@ from utils.tasks import PROCESSORS, NUM_LABELS_TASK, TASK_TYPE
 from modules.model import BertForSequenceClassification_tpr
 from utils.evaluation import evaluate
 from utils.prediction import predict
-from utils.prepare import prepare_data_loader, prepare_model, prepare_optim, modify_model
+from utils.prepare import prepare_data_loader, prepare_model, prepare_optim
+from utils.model_utils import modify_model
 
 import warnings
 warnings.simplefilter("ignore", UserWarning)
@@ -303,7 +303,7 @@ def main(args):
                     with torch.no_grad():
                         modify_model(best_model, dev_task, args)
 
-                    processor = PROCESSORS[dev_task.lower()](args.num_ex)
+                    processor = PROCESSORS[dev_task.lower()](args.num_ex, False)
                     num_labels = NUM_LABELS_TASK[dev_task.lower()]
                     task_type = TASK_TYPE[dev_task.lower()]
                     label_list = None

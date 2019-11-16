@@ -149,10 +149,10 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
             desired_keys.extend(['head.F.weight', 'head.F.bias'])
         if args.load_role_selector:
             logger.info('loading role selectors from checkpoint model')
-            desired_keys.extend(['head.enc_aR.weight', 'head.enc_aR.bias', 'head.WaR.weight', 'head.WaR.bias'])
+            desired_keys.extend(['head.enc_aR', 'head.WaR.weight', 'head.WaR.bias'])
         if args.load_filler_selector:
             logger.info('loading filler selectors from checkpoint model')
-            desired_keys.extend(['head.enc_aF.weight', 'head.enc_aF.bias', 'head.WaF.weight', 'head.WaF.bias'])
+            desired_keys.extend(['head.enc_aF', 'head.WaF.weight', 'head.WaF.bias'])
         if args.load_bert_params:
             logger.info('loading bert params from checkpoint model')
             desired_keys.extend([name for name in model_state_dict.keys() if name.startswith('bert')])
@@ -164,9 +164,15 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
             desired_keys.extend([name for name in model_state_dict.keys() if name.startswith('head.rnn')])
 
         state = dict()
+
         for key, val in model_state_dict.items():
             if key in desired_keys:
                 state[key] = val
+            if 'head.enc_aF' in desired_keys and key.startswith('head.enc_aF'):
+                state[key] = val
+            if 'head.enc_aR' in desired_keys and key.startswith('head.enc_aR'):
+                state[key] = val
+
         model.load_state_dict(state, strict=False)
 
         frozen_keys = []
@@ -211,29 +217,3 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
         model = torch.nn.DataParallel(model)
 
     return model, bert_config
-
-
-def modify_model(model, dev_task, args):
-
-    # load previous task best-model classifier (and possibly other parameters)
-    prev_model_state_dict = torch.load(os.path.join(*[args.output_dir, dev_task, "pytorch_model_best.bin"]))['state_dict']
-    pre = model.module if hasattr(model, 'module') else model
-
-    pre.classifier.weight.set_(prev_model_state_dict['classifier.weight'])
-    pre.classifier.bias.set_(prev_model_state_dict['classifier.bias'])
-    if args.replace_filler:
-        pre.head.F.weight.set_(prev_model_state_dict['head.F.weight'])
-        pre.head.F.bias.set_(prev_model_state_dict['head.F.bias'])
-    if args.replace_role:
-        pre.head.R.weight.set_(prev_model_state_dict['head.R.weight'])
-        pre.head.R.bias.set_(prev_model_state_dict['head.R.bias'])
-    if args.replace_filler_selector:
-        pre.head.enc_aF.weight.set_(prev_model_state_dict['head.enc_aF.weight'])
-        pre.head.enc_aF.bias.set_(prev_model_state_dict['head.enc_aF.bias'])
-        pre.head.WaF.weight.set_(prev_model_state_dict['head.WaF.weight'])
-        pre.head.WaF.bias.set_(prev_model_state_dict['head.WaF.bias'])
-    if args.replace_role_selector:
-        pre.head.enc_aR.weight.set_(prev_model_state_dict['head.enc_aR.weight'])
-        pre.head.enc_aR.bias.set_(prev_model_state_dict['head.enc_aR.bias'])
-        pre.head.WaR.weight.set_(prev_model_state_dict['head.WaR.weight'])
-        pre.head.WaR.bias.set_(prev_model_state_dict['head.WaR.bias'])
