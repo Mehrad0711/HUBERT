@@ -149,10 +149,12 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
             desired_keys.extend(['head.F.weight', 'head.F.bias'])
         if args.load_role_selector:
             logger.info('loading role selectors from checkpoint model')
-            desired_keys.extend(['head.enc_aR', 'head.WaR.weight', 'head.WaR.bias'])
+            desired_keys.extend(['head.WaR.weight', 'head.WaR.bias'])
+            desired_keys.extend([name for name in model_state_dict.keys() if name.startswith('head.enc_aR')])
         if args.load_filler_selector:
             logger.info('loading filler selectors from checkpoint model')
-            desired_keys.extend(['head.enc_aF', 'head.WaF.weight', 'head.WaF.bias'])
+            desired_keys.extend(['head.WaF.weight', 'head.WaF.bias'])
+            desired_keys.extend([name for name in model_state_dict.keys() if name.startswith('head.enc_aF')])
         if args.load_bert_params:
             logger.info('loading bert params from checkpoint model')
             desired_keys.extend([name for name in model_state_dict.keys() if name.startswith('bert')])
@@ -168,10 +170,6 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
         for key, val in model_state_dict.items():
             if key in desired_keys:
                 state[key] = val
-            if 'head.enc_aF' in desired_keys and key.startswith('head.enc_aF'):
-                state[key] = val
-            if 'head.enc_aR' in desired_keys and key.startswith('head.enc_aR'):
-                state[key] = val
 
         model.load_state_dict(state, strict=False)
 
@@ -184,10 +182,12 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
             frozen_keys.extend(['head.F.weight', 'head.F.bias'])
         if args.freeze_role_selector:
             logger.info('freezing role selectors if loaded from ckpt model')
-            frozen_keys.extend(['head.enc_aR.weight', 'head.enc_aR.bias', 'head.WaR.weight', 'head.WaR.bias'])
+            frozen_keys.extend(['head.WaR.weight', 'head.WaR.bias'])
+            frozen_keys.extend([name for name in model_state_dict.keys() if name.startswith('head.enc_aR')])
         if args.freeze_filler_selector:
             logger.info('freezing filler selectors if loaded from ckpt model')
-            frozen_keys.extend(['head.enc_aF.weight', 'head.enc_aF.bias', 'head.WaF.weight', 'head.WaF.bias'])
+            frozen_keys.extend(['head.WaF.weight', 'head.WaF.bias'])
+            frozen_keys.extend([name for name in model_state_dict.keys() if name.startswith('head.enc_aF')])
         if args.freeze_bert_params:
             logger.info('freezing bert params if loaded from ckpt model')
             frozen_keys.extend([name for name in model_state_dict.keys() if name.startswith('bert')])

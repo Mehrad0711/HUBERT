@@ -21,23 +21,17 @@ def modify_model(model, dev_task, args):
     prev_model_state_dict = torch.load(os.path.join(*[args.output_dir, dev_task, "pytorch_model_best.bin"]))['state_dict']
     pre = model.module if hasattr(model, 'module') else model
 
-    pre.classifier.weight.set_(prev_model_state_dict['classifier.weight'])
-    pre.classifier.bias.set_(prev_model_state_dict['classifier.bias'])
+    replace_keys = ['classifier.weight', 'classifier.bias']
     if args.replace_filler:
-        pre.head.F.weight.set_(prev_model_state_dict['head.F.weight'])
-        pre.head.F.bias.set_(prev_model_state_dict['head.F.bias'])
+        replace_keys.extend(['head.F.weight', 'head.F.bias'])
     if args.replace_role:
-        pre.head.R.weight.set_(prev_model_state_dict['head.R.weight'])
-        pre.head.R.bias.set_(prev_model_state_dict['head.R.bias'])
+        replace_keys.extend(['head.R.weight', 'head.R.bias'])
     if args.replace_filler_selector:
-        filler_selector = [key for key in prev_model_state_dict.keys() if key.startswith('head.enc_aF')]
-        for key in filler_selector:
-            eval('pre.' + key).set_(prev_model_state_dict[key])
-        pre.head.WaF.weight.set_(prev_model_state_dict['head.WaF.weight'])
-        pre.head.WaF.bias.set_(prev_model_state_dict['head.WaF.bias'])
+        replace_keys.extend(['head.WaF.weight', 'head.WaF.bias'])
+        replace_keys.extend([key for key in prev_model_state_dict.keys() if key.startswith('head.enc_aF')])
     if args.replace_role_selector:
-        role_selector = [key for key in prev_model_state_dict.keys() if key.startswith('head.enc_aF')]
-        for key in role_selector:
-            eval('pre.' + key).set_(prev_model_state_dict[key])
-        pre.head.WaR.weight.set_(prev_model_state_dict['head.WaR.weight'])
-        pre.head.WaR.bias.set_(prev_model_state_dict['head.WaR.bias'])
+        replace_keys.extend(['head.WaR.weight', 'head.WaR.bias'])
+        replace_keys.extend([key for key in prev_model_state_dict.keys() if key.startswith('head.enc_aR')])
+
+    for key in replace_keys:
+        eval('pre.' + key).set_(prev_model_state_dict[key])
