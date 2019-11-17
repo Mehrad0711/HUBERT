@@ -4,13 +4,19 @@ import logging
 import os
 from collections import defaultdict
 import nltk
+from nltk.tag import StanfordPOSTagger
 import re
+from arguments import define_args
+
 nltk.download('punkt')
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+args = define_args()
+pos_tagger = StanfordPOSTagger(args.stanford_model, args.stanford_jar, encoding='utf8')
 
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
@@ -135,7 +141,6 @@ class NLIProcessor(DataProcessor):
             else:
                 self.data[category] = self._create_examples(self._read_json(os.path.join(data_dir, file)), 'train')
 
-
     def get_labels(self):
         """See base class."""
         return ["contradiction", "entailment", "neutral"]
@@ -152,8 +157,14 @@ class NLIProcessor(DataProcessor):
                 label = None
             else:
                 label = line['label']
+
+            text_a_parsed = None
+            text_b_parsed = None
+            if self.pos_tags:
+                text_a_parsed = pos_tagger.tag(text_a.split())
+                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
 
 
@@ -196,8 +207,14 @@ class ACCProcessor(DataProcessor):
                 label = None
             else:
                 label = line['label']
+
+            text_a_parsed = None
+            text_b_parsed = None
+            if self.pos_tags:
+                text_a_parsed = pos_tagger.tag(text_a.split())
+                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
 
 class SNLIProcessor(DataProcessor):
@@ -243,7 +260,9 @@ class SNLIProcessor(DataProcessor):
             text_b_parsed = None
             if self.pos_tags:
                 text_a_parsed = re.findall(r'\([^\)\(]*\)', line[6])
+                text_a_parsed = [tuple([item.split()[0][1:], item.split()[1][:-1]]) for item in text_a_parsed]
                 text_b_parsed = re.findall(r'\([^\)\(]*\)', line[7])
+                text_b_parsed = [tuple([item.split()[0][1:], item.split()[1][:-1]]) for item in text_b_parsed]
 
             examples.append(
                 InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
@@ -286,8 +305,14 @@ class HANSProcessor(DataProcessor):
                 label = None
             else:
                 label = line[0]
+
+            text_a_parsed = None
+            text_b_parsed = None
+            if self.pos_tags:
+                text_a_parsed = pos_tagger.tag(text_a.split())
+                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
 
 class MNLIProcessor(DataProcessor):
@@ -334,7 +359,9 @@ class MNLIProcessor(DataProcessor):
             text_b_parsed = None
             if self.pos_tags:
                 text_a_parsed = re.findall(r'\([^\)\(]*\)', line[6])
+                text_a_parsed = [tuple([item.split()[0][1:], item.split()[1][:-1]]) for item in text_a_parsed]
                 text_b_parsed = re.findall(r'\([^\)\(]*\)', line[7])
+                text_b_parsed = [tuple([item.split()[0][1:], item.split()[1][:-1]]) for item in text_b_parsed]
 
             examples.append(
                 InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
@@ -379,8 +406,14 @@ class MRPCProcessor(DataProcessor):
                 label = None
             else:
                 label = line[0]
+
+            text_a_parsed = None
+            text_b_parsed = None
+            if self.pos_tags:
+                text_a_parsed = pos_tagger.tag(text_a.split())
+                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
 
 class QNLIProcessor(DataProcessor):
@@ -420,8 +453,14 @@ class QNLIProcessor(DataProcessor):
                 label = None
             else:
                 label = line[-1]
+
+            text_a_parsed = None
+            text_b_parsed = None
+            if self.pos_tags:
+                text_a_parsed = pos_tagger.tag(text_a.split())
+                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
 
 
@@ -468,8 +507,13 @@ class QQPProcessor(DataProcessor):
                 text_b = line[-2]
                 label = line[-1]
 
+            text_a_parsed = None
+            text_b_parsed = None
+            if self.pos_tags:
+                text_a_parsed = pos_tagger.tag(text_a.split())
+                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
 
 class RTEProcessor(DataProcessor):
@@ -513,8 +557,13 @@ class RTEProcessor(DataProcessor):
                 text_b = line[-2]
                 label = line[-1]
 
+            text_a_parsed = None
+            text_b_parsed = None
+            if self.pos_tags:
+                text_a_parsed = pos_tagger.tag(text_a.split())
+                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
 
 class WNLIProcessor(DataProcessor):
@@ -558,8 +607,13 @@ class WNLIProcessor(DataProcessor):
                 text_b = line[-2]
                 label = line[-1]
 
+            text_a_parsed = None
+            text_b_parsed = None
+            if self.pos_tags:
+                text_a_parsed = pos_tagger.tag(text_a.split())
+                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
 
 
@@ -597,14 +651,16 @@ class SSTProcessor(DataProcessor):
                 guid = "%s-%s" % (set_type, i)
                 text_a = line[1]
                 label = None
-                examples.append(
-                    InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
             else:
                 guid = "%s-%s" % (set_type, i)
                 text_a = line[0]
                 label = line[-1]
-                examples.append(
-                    InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
+
+            text_a_parsed = None
+            if self.pos_tags:
+                text_a_parsed = pos_tagger.tag(text_a.split())
+            examples.append(
+                InputExample(guid=guid, text_a=text_a, text_b=None, label=label, parsed_a=text_a_parsed))
         return examples
 
 
@@ -650,8 +706,13 @@ class STSProcessor(DataProcessor):
                 text_b = line[-2]
                 label = line[-1]
 
+            text_a_parsed = None
+            text_b_parsed = None
+            if self.pos_tags:
+                text_a_parsed = pos_tagger.tag(text_a.split())
+                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
 
 class COLAProcessor(DataProcessor):
@@ -688,14 +749,17 @@ class COLAProcessor(DataProcessor):
                 guid = "%s-%s" % (set_type, i)
                 text_a = line[-1]
                 label = None
-                examples.append(
-                    InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
+
             else:
                 guid = "%s-%s" % (set_type, i)
                 text_a = line[-1]
                 label = line[1]
-                examples.append(
-                    InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
+
+            text_a_parsed = None
+            if self.pos_tags:
+                text_a_parsed = pos_tagger.tag(text_a.split())
+            examples.append(
+                InputExample(guid=guid, text_a=text_a, text_b=None, label=label, parsed_a=text_a_parsed))
         return examples
 
 
@@ -833,6 +897,12 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             else:
                 label_id = None
 
+        if example.parsed_a:
+            if example.parsed_b and not single_sentence:
+                token_tags.append((example.parsed_a, example.parsed_b))
+            else:
+                token_tags.append((example.parsed_a,))
+
         guid = example.guid
         if ex_index < 5:
             logger.info("*** Example ***")
@@ -845,12 +915,8 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
                 "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
             if example.label is not None:
                 logger.info("label: %s (id = %d)" % (example.label, label_id))
-
-        if example.parsed_a:
-            if example.parsed_b and not single_sentence:
-                token_tags.append((example.parsed_a, example.parsed_b))
-            else:
-                token_tags.append((example.parsed_a,))
+            if example.parsed_a:
+                logger.info("token_tag pairs: {}".format(token_tags))
 
         features.append(InputFeatures(guid, input_ids, input_mask, segment_ids, sub_word_masks, orig_to_tok_map, label_id))
 

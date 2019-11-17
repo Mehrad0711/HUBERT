@@ -359,11 +359,15 @@ def define_args():
                         type=int,
                         default=1,
                         help='choose K biggest value from tpr attentions')
-    parser.add_argument("--get_POS",
-                        type=str2bool,
-                        default=False,
-                        help='get POS tags for tokens')
+    parser.add_argument("--stanford_jar",
+                        default='./scripts/stanford-postagger-3.9.2.jar',
+                        help='path to stanford jar file for Stanford POS tagger')
+    parser.add_argument("--stanford_model",
+                        default='./scripts/english-bidirectional-distsim.tagger',
+                        help='path to stanford model file for Stanford POS tagger')
 
     args = parser.parse_args()
 
     return args
+
+

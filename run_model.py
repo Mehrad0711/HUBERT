@@ -390,7 +390,7 @@ def main(args):
                                                   max_seq_len=args.max_seq_length,
                                                   **opt)
 
-        model.load_state_dict(model_state_dict, strict=True)
+        # model.load_state_dict(model_state_dict, strict=True)
 
         if args.reset_temp_ratio != 1.0 and hasattr(model.head, 'temperature'):
             new_temp = model.head.temperature / args.reset_temp_ratio
@@ -408,15 +408,15 @@ def main(args):
             output_attention_file = os.path.join(*[args.output_dir, eval_task_name, "tpr_attention.txt"])
             vals = {}
             if args.single_sentence:
-                tags = [[subval.split()[0][1:] for subval in val[0]] for val in token_tags]
-                tokens = [[subval.split()[1][:-1] for subval in val[0]] for val in token_tags]
+                tags = [[subval[0] for subval in val[0]] for val in token_tags]
+                tokens = [[subval[1] for subval in val[0]] for val in token_tags]
             else:
                 tags = []
                 tokens = []
-                tags_a = [[subval.split()[0][1:] for subval in val[0]] for val in token_tags]
-                tokens_a = [[subval.split()[1][:-1] for subval in val[0]] for val in token_tags]
-                tags_b = [[subval.split()[0][1:] for subval in val[1]] for val in token_tags]
-                tokens_b = [[subval.split()[1][:-1] for subval in val[1]] for val in token_tags]
+                tags_a = [[subval[0] for subval in val[0]] for val in token_tags]
+                tokens_a = [[subval[1] for subval in val[0]] for val in token_tags]
+                tags_b = [[subval[0] for subval in val[1]] for val in token_tags]
+                tokens_b = [[subval[1] for subval in val[1]] for val in token_tags]
                 for tag_a, tag_b, token_a, token_b in zip(tags_a, tags_b, tokens_a, tokens_b):
                     tags.append(tag_a + ['SEP'] + tag_b)
                     tokens.append(token_a + ['[SEP]'] + token_b)
