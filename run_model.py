@@ -337,8 +337,11 @@ def main(args, logger):
             bad_sents_count = 0
             for i in range(len(all_ids)):
                 try:
-                    assert len(tokens[i]) == len(pos_tags[i]) == len(F_list[i]) == len(R_list[i])
-                    val_i = {'tokens': tokens[i], 'pos_tags': pos_tags[i], 'all_aFs': F_list[i], 'all_aRs': R_list[i]}
+                    assert len(tokens[i])  == len(F_list[i]) == len(R_list[i])
+                    val_i = {'tokens': tokens[i], 'all_aFs': F_list[i], 'all_aRs': R_list[i]}
+                    if return_pos_tags:
+                        assert len(pos_tags[i]) == len(tokens[i])
+                        val_i.update({'pos_tags': pos_tags[i]})
                     if return_ner_tags:
                         assert len(ner_tags[i]) == len(tokens[i])
                         val_i.update({'ner_tags': ner_tags[i]})

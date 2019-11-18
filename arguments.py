@@ -361,7 +361,7 @@ def define_args():
                         help='choose K biggest value from tpr attentions')
     parser.add_argument("--return_POS",
                         type=str2bool,
-                        default=True,
+                        default=False,
                         help='return POS tags for tokens in the input data')
     parser.add_argument("--return_NER",
                         type=str2bool,
