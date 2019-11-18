@@ -1,5 +1,6 @@
 import torch
 import os
+import numpy as np
 
 def inductive_bias(input):
     """
@@ -13,6 +14,20 @@ def inductive_bias(input):
     output = torch.sum(item1 + item2, 1)
 
     return output
+
+
+def decay(value, mode, final_ratio, global_step, t_total):
+    assert final_ratio <= 1.0
+
+    if mode == 'exp':
+        alpha = np.log(final_ratio)
+        new_value = value * np.exp(-alpha * global_step / t_total)
+
+    elif mode == 'lin':
+        alpha = 1 - final_ratio
+        new_value = value * (1 - alpha * global_step / t_total)
+
+    return new_value
 
 
 def modify_model(model, dev_task, args):

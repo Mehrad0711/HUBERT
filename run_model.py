@@ -41,93 +41,14 @@ from modules.model import BertForSequenceClassification_tpr
 from utils.evaluation import evaluate
 from utils.prediction import predict
 from utils.prepare import prepare_data_loader, prepare_model, prepare_optim
-from utils.model_utils import modify_model
+from utils.model_utils import modify_model, decay
 
 import warnings
 warnings.simplefilter("ignore", UserWarning)
 warnings.simplefilter("ignore", FutureWarning)
 
-def decay(value, mode, final_ratio, global_step, t_total):
-    assert final_ratio <= 1.0
-    if mode == 'exp':
-        alpha = np.log(final_ratio)
-        new_value = value * np.exp(-alpha * global_step / t_total)
 
-    elif mode == 'lin':
-        alpha = 1 - final_ratio
-        new_value = value * (1 - alpha * global_step / t_total)
-
-    return new_value
-
-
-def main(args):
-
-    args.log_dir = args.output_dir #TODO
-    if os.path.exists(args.output_dir):
-        if args.delete_ok:
-            shutil.rmtree(args.output_dir)
-        else:
-            raise ValueError("Output directory ({}) already exists and is not empty.".format(args.output_dir))
-    os.makedirs(args.output_dir, exist_ok=False)
-
-    # create logger
-    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-                    datefmt='%m/%d/%Y %H:%M:%S',
-                    level=logging.INFO)
-    logger = logging.getLogger(__name__)
-    log_file = os.path.join(args.log_dir, 'log.txt')
-    fh = logging.FileHandler(log_file, mode='w')
-    fh.setLevel(logging.DEBUG)
-    logger.addHandler(fh)
-
-    if len(args.cont_task_names) != len(set(args.cont_task_names)) or args.task_name in args.cont_task_names:
-        logger.error('Please make sure all continual tasks are distinct and also different from source_task')
-        sys.exit('Exiting the program...')
-
-    logger.info('** output_dir is {} **'.format(args.output_dir))
-
-    if args.fixed_Role:
-        if args.nRoles != args.dRoles:
-            logger.warning('Role dimension should be the same as number of Roles when using one-hot embedding')
-            logger.warning('changing Role dimension from {} to {} to match number of Roles'.format(args.dRoles, args.nRoles))
-            setattr(args, 'dRoles', args.nRoles)
-
-    if args.no_cuda:
-        device = torch.device("cpu")
-        n_gpu = 0
-    elif args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-        n_gpu = torch.cuda.device_count()
-    else:
-        torch.cuda.set_device(args.local_rank)
-        device = torch.device("cuda", args.local_rank)
-        n_gpu = 1
-        # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
-        torch.distributed.init_process_group(backend='nccl')
-    args.device = device
-    args.n_gpu = n_gpu
-    logger.info("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
-        device, n_gpu, bool(args.local_rank != -1), args.fp16))
-
-    if args.gradient_accumulation_steps < 1:
-        raise ValueError("Invalid gradient_accumulation_steps parameter: {}, should be >= 1".format(
-            args.gradient_accumulation_steps))
-
-    args.train_batch_size = int(args.train_batch_size / args.gradient_accumulation_steps)
-
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    if n_gpu > 0:
-        torch.cuda.manual_seed_all(args.seed)
-
-    if not any([args.do_train, args.do_eval, args.do_test]):
-        raise ValueError("At least one of `do_train` or `do_eval` or 'do_test' must be True.")
-
-    if 'uncased' in args.bert_model and not args.do_lower_case:
-        logger.warning('do_lower_case should be True if uncased bert models are used')
-        logger.warning('changing do_lower_case from False to True')
-        setattr(args, 'do_lower_case', True)
+def main(args, logger):
 
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
 
@@ -146,7 +67,7 @@ def main(args):
                 raise ValueError("Task not found: %s" % (task.lower()))
             logger.info('*** Start training for {} ***'.format(task))
 
-            processor = PROCESSORS[task.lower()](args.num_ex, False)
+            processor = PROCESSORS[task.lower()](args.num_ex)
             num_labels = NUM_LABELS_TASK[task.lower()]
             task_type = TASK_TYPE[task.lower()]
             label_list = None
@@ -303,7 +224,7 @@ def main(args):
                     with torch.no_grad():
                         modify_model(best_model, dev_task, args)
 
-                    processor = PROCESSORS[dev_task.lower()](args.num_ex, False)
+                    processor = PROCESSORS[dev_task.lower()](args.num_ex)
                     num_labels = NUM_LABELS_TASK[dev_task.lower()]
                     task_type = TASK_TYPE[dev_task.lower()]
                     label_list = None
@@ -317,7 +238,6 @@ def main(args):
                     logger.info("train_task: {}, eval_task: {}".format(task, dev_task))
                     for key in sorted(result.keys()):
                         logger.info("  %s = %s", key, str(result[key]))
-
 
             tensorboard_writer.close()
 
@@ -447,7 +367,7 @@ def main(args):
 
         test_task_name = all_tasks[-1]
         logger.info('*** Start testing for {} ***'.format(test_task_name))
-        processor = PROCESSORS[test_task_name.lower()](args.num_ex, False)
+        processor = PROCESSORS[test_task_name.lower()](args.num_ex)
         num_labels = NUM_LABELS_TASK[test_task_name.lower()]
         task_type = TASK_TYPE[test_task_name.lower()]
         label_list = None
@@ -518,7 +438,7 @@ def main(args):
 
         else:
             # prepare test data
-            test_dataloader, all_guids = prepare_data_loader(args, processor, label_list, task_type, test_task_name, tokenizer, split='test')
+            test_dataloader, all_guids = prepare_data_loader(args, processor, label_list, task_type, test_task_name, tokenizer, split='test')[:2]
 
             result = predict(args, model, test_dataloader, all_guids, device, task_type)
 
@@ -542,4 +462,71 @@ def main(args):
 
 if __name__ == "__main__":
     args = define_args()
-    main(args)
+
+    args.log_dir = args.output_dir #TODO
+    if os.path.exists(args.output_dir):
+        if args.delete_ok:
+            shutil.rmtree(args.output_dir)
+        else:
+            raise ValueError("Output directory ({}) already exists and is not empty.".format(args.output_dir))
+    os.makedirs(args.output_dir, exist_ok=False)
+
+    # create logger
+    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+                    datefmt='%m/%d/%Y %H:%M:%S',
+                    level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    log_file = os.path.join(args.log_dir, 'log.txt')
+    fh = logging.FileHandler(log_file, mode='w')
+    fh.setLevel(logging.DEBUG)
+    logger.addHandler(fh)
+
+    if len(args.cont_task_names) != len(set(args.cont_task_names)) or args.task_name in args.cont_task_names:
+        logger.error('Please make sure all continual tasks are distinct and also different from source_task')
+        sys.exit('Exiting the program...')
+
+    logger.info('** output_dir is {} **'.format(args.output_dir))
+
+    if args.fixed_Role:
+        if args.nRoles != args.dRoles:
+            logger.warning('Role dimension should be the same as number of Roles when using one-hot embedding')
+            logger.warning('changing Role dimension from {} to {} to match number of Roles'.format(args.dRoles, args.nRoles))
+            setattr(args, 'dRoles', args.nRoles)
+    if args.no_cuda:
+        device = torch.device("cpu")
+        n_gpu = 0
+    elif args.local_rank == -1 or args.no_cuda:
+        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+        n_gpu = torch.cuda.device_count()
+    else:
+        torch.cuda.set_device(args.local_rank)
+        device = torch.device("cuda", args.local_rank)
+        n_gpu = 1
+        # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
+        torch.distributed.init_process_group(backend='nccl')
+    args.device = device
+    args.n_gpu = n_gpu
+    logger.info("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
+        device, n_gpu, bool(args.local_rank != -1), args.fp16))
+
+    if args.gradient_accumulation_steps < 1:
+        raise ValueError("Invalid gradient_accumulation_steps parameter: {}, should be >= 1".format(
+            args.gradient_accumulation_steps))
+
+    args.train_batch_size = int(args.train_batch_size / args.gradient_accumulation_steps)
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if n_gpu > 0:
+        torch.cuda.manual_seed_all(args.seed)
+
+    if not any([args.do_train, args.do_eval, args.do_test]):
+        raise ValueError("At least one of `do_train` or `do_eval` or 'do_test' must be True.")
+
+    if 'uncased' in args.bert_model and not args.do_lower_case:
+        logger.warning('do_lower_case should be True if uncased bert models are used')
+        logger.warning('changing do_lower_case from False to True')
+        setattr(args, 'do_lower_case', True)
+
+    main(args, logger)
