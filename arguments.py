@@ -336,6 +336,7 @@ def define_args():
                         type=float,
                         default=1.0,
                         help='set temperature to a smaller value during evaluation and testing')
+
     # attention arguments
     parser.add_argument("--save_tpr_attentions",
                         type=str2bool,
@@ -343,9 +344,9 @@ def define_args():
                         help='save aFs and aRs')
     parser.add_argument("--save_strategy",
                         type=str,
-                        default='top',
+                        default='topK',
                         help='method to retrieve tpr attention values',
-                        choices=['topK', 'sample', 'pickK'])
+                        choices=['topK', 'sample', 'selectK'])
     parser.add_argument("--data_split_attention",
                         type=str,
                         default='dev',
@@ -361,7 +362,7 @@ def define_args():
                         help='choose K biggest value from tpr attentions')
     parser.add_argument("--return_POS",
                         type=str2bool,
-                        default=True,
+                        default=False,
                         help='return POS tags for tokens in the input data')
     parser.add_argument("--return_NER",
                         type=str2bool,
