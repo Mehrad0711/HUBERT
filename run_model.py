@@ -378,7 +378,7 @@ def main(args):
                                                   max_seq_len=args.max_seq_length,
                                                   **opt)
 
-        # model.load_state_dict(model_state_dict, strict=True)
+        model.load_state_dict(model_state_dict, strict=True)
 
         if args.reset_temp_ratio != 1.0 and hasattr(model.head, 'temperature'):
             new_temp = model.head.temperature / args.reset_temp_ratio
