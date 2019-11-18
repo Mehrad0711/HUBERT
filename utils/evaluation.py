@@ -50,11 +50,13 @@ def evaluate(args, model, eval_dataloader, device, task_type, global_step=None, 
                     F_list.append(torch.index_select(torch.tensor(input_F).type(aFs.type()), dim=0, index=orig_to_token_maps_unpadded).detach().cpu().tolist()[1:-1])
                     R_list.append(torch.index_select(torch.tensor(input_R).type(aRs.type()), dim=0, index=orig_to_token_maps_unpadded).detach().cpu().tolist()[1:-1])
 
-            elif args.save_strategy == 'top':
-                F_selected = torch.topk(aFs, k=args.K, dim=-1)[1] # choose indices
-                R_selected = torch.topk(aRs, k=args.K, dim=-1)[1] # choose indices
-                # F_selected = torch.topk(aFs, k=args.K, dim=-1)[1][:,:,[-1]] # choose indices
-                # R_selected = torch.topk(aRs, k=args.K, dim=-1)[1][:,:,[-1]] # choose indices
+            else:
+                if args.save_strategy == 'topK':
+                    F_selected = torch.topk(aFs, k=args.K, dim=-1)[1] # choose top K indices
+                    R_selected = torch.topk(aRs, k=args.K, dim=-1)[1] # choose top K indices
+                elif args.save_strategy == 'selectK':
+                    F_selected = torch.topk(aFs, k=args.K, dim=-1)[1][:,:,[-1]] # choose K th best index
+                    R_selected = torch.topk(aRs, k=args.K, dim=-1)[1][:,:,[-1]] # choose K th best index
                 for i, (input_F, input_R) in enumerate(zip(F_selected, R_selected)):
                     map = orig_to_token_maps[i]
                     index = map.tolist().index(-1)

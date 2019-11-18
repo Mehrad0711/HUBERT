@@ -36,7 +36,7 @@ from transformers.configuration_bert import PretrainedConfig
 from tqdm import tqdm, trange
 
 from arguments import define_args
-from utils.tasks import PROCESSORS, NUM_LABELS_TASK, TASK_TYPE
+from utils.global_vars import PROCESSORS, NUM_LABELS_TASK, TASK_TYPE
 from modules.model import BertForSequenceClassification_tpr
 from utils.evaluation import evaluate
 from utils.prediction import predict
