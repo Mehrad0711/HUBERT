@@ -4,7 +4,7 @@ import logging
 import os
 from collections import defaultdict
 import nltk
-from nltk.tag import StanfordPOSTagger
+from nltk.tag import StanfordPOSTagger, StanfordNERTagger
 import re
 from arguments import define_args
 
@@ -16,12 +16,13 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s
 logger = logging.getLogger(__name__)
 
 args = define_args()
-pos_tagger = StanfordPOSTagger(args.stanford_model, args.stanford_jar, encoding='utf8')
+pos_tagger = StanfordPOSTagger(args.stanford_pos_model, args.stanford_pos_jar)
+ner_tagger = StanfordNERTagger(args.stanford_ner_model, args.stanford_ner_jar)
 
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
 
-    def __init__(self, guid, text_a, text_b=None, label=None, parsed_a=None, parsed_b=None):
+    def __init__(self, guid, text_a, text_b=None, label=None, parsed_a=None, parsed_b=None, ner_a=None, ner_b=None):
         """Constructs a InputExample.
 
         Args:
@@ -39,6 +40,8 @@ class InputExample(object):
         self.label = label
         self.parsed_a = parsed_a
         self.parsed_b = parsed_b
+        self.ner_a = ner_a
+        self.ner_b = ner_b
 
 class MultiInputExample(object):
     """A single training/test example for more complex sequence classification tasks (e,g, SuperGLUE)."""
@@ -81,9 +84,8 @@ class MultiInputFeatures(object):
 class DataProcessor(object):
     """Base class for data converters for sequence classification data sets."""
 
-    def __init__(self, num_ex, pos_tags):
+    def __init__(self, num_ex):
         self.num_ex = num_ex
-        self.pos_tags = pos_tags
 
     def get_train_examples(self, data_dir):
         """Gets a collection of `InputExample`s for the train set."""
@@ -125,8 +127,8 @@ class DataProcessor(object):
 class NLIProcessor(DataProcessor):
     """Processor for the general NLI data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(NLIProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(NLIProcessor, self).__init__(num_ex)
         self.data = defaultdict()
         # self.metadata = defaultdict()
 
@@ -140,6 +142,7 @@ class NLIProcessor(DataProcessor):
                 continue
             else:
                 self.data[category] = self._create_examples(self._read_json(os.path.join(data_dir, file)), 'train')
+
 
     def get_labels(self):
         """See base class."""
@@ -157,22 +160,16 @@ class NLIProcessor(DataProcessor):
                 label = None
             else:
                 label = line['label']
-
-            text_a_parsed = None
-            text_b_parsed = None
-            if self.pos_tags:
-                text_a_parsed = pos_tagger.tag(text_a.split())
-                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
 
 class ACCProcessor(DataProcessor):
     """Processor for the ... data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(ACCProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(ACCProcessor, self).__init__(num_ex)
         self.data = defaultdict()
         # self.metadata = defaultdict()
 
@@ -207,21 +204,15 @@ class ACCProcessor(DataProcessor):
                 label = None
             else:
                 label = line['label']
-
-            text_a_parsed = None
-            text_b_parsed = None
-            if self.pos_tags:
-                text_a_parsed = pos_tagger.tag(text_a.split())
-                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
 class SNLIProcessor(DataProcessor):
     """Processor for the SNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(SNLIProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(SNLIProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -256,14 +247,10 @@ class SNLIProcessor(DataProcessor):
             else:
                 label = line[-1]
 
-            text_a_parsed = None
-            text_b_parsed = None
-            if self.pos_tags:
-                text_a_parsed = re.findall(r'\([^\)\(]*\)', line[6])
-                text_a_parsed = [tuple([item.split()[0][1:], item.split()[1][:-1]]) for item in text_a_parsed]
-                text_b_parsed = re.findall(r'\([^\)\(]*\)', line[7])
-                text_b_parsed = [tuple([item.split()[0][1:], item.split()[1][:-1]]) for item in text_b_parsed]
-
+            text_a_parsed = re.findall(r'\([^\)\(]*\)', line[5])
+            text_a_parsed = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in text_a_parsed]
+            text_b_parsed = re.findall(r'\([^\)\(]*\)', line[6])
+            text_b_parsed = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in text_b_parsed]
             examples.append(
                 InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
         return examples
@@ -271,8 +258,8 @@ class SNLIProcessor(DataProcessor):
 class HANSProcessor(DataProcessor):
     """Processor for the HANS data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(HANSProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(HANSProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -305,21 +292,15 @@ class HANSProcessor(DataProcessor):
                 label = None
             else:
                 label = line[0]
-
-            text_a_parsed = None
-            text_b_parsed = None
-            if self.pos_tags:
-                text_a_parsed = pos_tagger.tag(text_a.split())
-                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
 class MNLIProcessor(DataProcessor):
     """Processor for the MNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(MNLIProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(MNLIProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -355,13 +336,10 @@ class MNLIProcessor(DataProcessor):
             else:
                 label = line[-1]
 
-            text_a_parsed = None
-            text_b_parsed = None
-            if self.pos_tags:
-                text_a_parsed = re.findall(r'\([^\)\(]*\)', line[6])
-                text_a_parsed = [tuple([item.split()[0][1:], item.split()[1][:-1]]) for item in text_a_parsed]
-                text_b_parsed = re.findall(r'\([^\)\(]*\)', line[7])
-                text_b_parsed = [tuple([item.split()[0][1:], item.split()[1][:-1]]) for item in text_b_parsed]
+            text_a_parsed = re.findall(r'\([^\)\(]*\)', line[6])
+            text_a_parsed = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in text_a_parsed]
+            text_b_parsed = re.findall(r'\([^\)\(]*\)', line[7])
+            text_b_parsed = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in text_b_parsed]
 
             examples.append(
                 InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
@@ -371,8 +349,8 @@ class MNLIProcessor(DataProcessor):
 class MRPCProcessor(DataProcessor):
     """Processor for the MRPC data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(MRPCProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(MRPCProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -406,21 +384,15 @@ class MRPCProcessor(DataProcessor):
                 label = None
             else:
                 label = line[0]
-
-            text_a_parsed = None
-            text_b_parsed = None
-            if self.pos_tags:
-                text_a_parsed = pos_tagger.tag(text_a.split())
-                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
 class QNLIProcessor(DataProcessor):
     """Processor for the QNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(QNLIProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(QNLIProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -453,22 +425,16 @@ class QNLIProcessor(DataProcessor):
                 label = None
             else:
                 label = line[-1]
-
-            text_a_parsed = None
-            text_b_parsed = None
-            if self.pos_tags:
-                text_a_parsed = pos_tagger.tag(text_a.split())
-                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
 
 class QQPProcessor(DataProcessor):
     """Processor for the QQP data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(QQPProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(QQPProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -507,20 +473,15 @@ class QQPProcessor(DataProcessor):
                 text_b = line[-2]
                 label = line[-1]
 
-            text_a_parsed = None
-            text_b_parsed = None
-            if self.pos_tags:
-                text_a_parsed = pos_tagger.tag(text_a.split())
-                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
 class RTEProcessor(DataProcessor):
     """Processor for the RTE data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(RTEProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(RTEProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -557,20 +518,15 @@ class RTEProcessor(DataProcessor):
                 text_b = line[-2]
                 label = line[-1]
 
-            text_a_parsed = None
-            text_b_parsed = None
-            if self.pos_tags:
-                text_a_parsed = pos_tagger.tag(text_a.split())
-                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
 class WNLIProcessor(DataProcessor):
     """Processor for the WNLI data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(WNLIProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(WNLIProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -607,21 +563,16 @@ class WNLIProcessor(DataProcessor):
                 text_b = line[-2]
                 label = line[-1]
 
-            text_a_parsed = None
-            text_b_parsed = None
-            if self.pos_tags:
-                text_a_parsed = pos_tagger.tag(text_a.split())
-                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
 
 class SSTProcessor(DataProcessor):
     """Processor for the SST data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(SSTProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(SSTProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -651,24 +602,22 @@ class SSTProcessor(DataProcessor):
                 guid = "%s-%s" % (set_type, i)
                 text_a = line[1]
                 label = None
+                examples.append(
+                    InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
             else:
                 guid = "%s-%s" % (set_type, i)
                 text_a = line[0]
                 label = line[-1]
-
-            text_a_parsed = None
-            if self.pos_tags:
-                text_a_parsed = pos_tagger.tag(text_a.split())
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=None, label=label, parsed_a=text_a_parsed))
+                examples.append(
+                    InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
         return examples
 
 
 class STSProcessor(DataProcessor):
     """Processor for the STS data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(STSProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(STSProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -706,20 +655,15 @@ class STSProcessor(DataProcessor):
                 text_b = line[-2]
                 label = line[-1]
 
-            text_a_parsed = None
-            text_b_parsed = None
-            if self.pos_tags:
-                text_a_parsed = pos_tagger.tag(text_a.split())
-                text_b_parsed = pos_tagger.tag(text_b.split())
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
 class COLAProcessor(DataProcessor):
     """Processor for the CoLA data set (GLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(COLAProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(COLAProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -749,25 +693,22 @@ class COLAProcessor(DataProcessor):
                 guid = "%s-%s" % (set_type, i)
                 text_a = line[-1]
                 label = None
-
+                examples.append(
+                    InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
             else:
                 guid = "%s-%s" % (set_type, i)
                 text_a = line[-1]
                 label = line[1]
-
-            text_a_parsed = None
-            if self.pos_tags:
-                text_a_parsed = pos_tagger.tag(text_a.split())
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=None, label=label, parsed_a=text_a_parsed))
+                examples.append(
+                    InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
         return examples
 
 
 class COPAProcessor(DataProcessor):
     """Processor for the COPA data set (SuperGLUE version)."""
 
-    def __init__(self, num_ex, pos_tags):
-        super(COPAProcessor, self).__init__(num_ex, pos_tags)
+    def __init__(self, num_ex):
+        super(COPAProcessor, self).__init__(num_ex)
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -801,7 +742,8 @@ class COPAProcessor(DataProcessor):
         return examples
 
 
-def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer, single_sentence=False):
+def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer,
+                                 single_sentence=False, return_pos_tags=False, return_ner_tags=False):
     """Loads a data file into a list of `InputBatch`s."""
 
     label_map = None
@@ -809,7 +751,8 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         label_map = {label: i for i, label in enumerate(label_list)}
 
     features = []
-    token_tags = []
+    token_pos = []
+    token_ner = []
     for (ex_index, example) in enumerate(examples):
 
         do_lower = tokenizer.basic_tokenizer.do_lower_case
@@ -897,11 +840,29 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             else:
                 label_id = None
 
+        return_pos_tags = return_pos_tags
+        return_ner_tags = return_ner_tags
+
+        if return_pos_tags and not example.parsed_a:
+            example.parsed_a = pos_tagger.tag(tokens_a)
+            if tokens_b:
+                example.parsed_b = pos_tagger.tag(tokens_b)
+        if return_ner_tags:
+            example.ner_a = ner_tagger.tag(nltk.word_tokenize(example.text_a))
+            if tokens_b:
+                example.ner_b = ner_tagger.tag(nltk.word_tokenize(example.text_b))
+
         if example.parsed_a:
             if example.parsed_b and not single_sentence:
-                token_tags.append((example.parsed_a, example.parsed_b))
+                token_pos.append((example.parsed_a, example.parsed_b))
             else:
-                token_tags.append((example.parsed_a,))
+                token_pos.append((example.parsed_a,))
+
+        if example.ner_a:
+            if example.ner_b and not single_sentence:
+                token_ner.append((example.ner_a, example.ner_b))
+            else:
+                token_ner.append((example.ner_a,))
 
         guid = example.guid
         if ex_index < 5:
@@ -913,14 +874,13 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
             logger.info(
                 "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-            if example.label is not None:
-                logger.info("label: %s (id = %d)" % (example.label, label_id))
-            if example.parsed_a:
-                logger.info("token_tag pairs: {}".format(token_tags))
+            for key in ['label', 'parsed_a', 'parsed_b', 'ner_a', 'ner_b']:
+                if getattr(example, key, None):
+                    logger.info("{}: {}".format(key, getattr(example, key)))
 
         features.append(InputFeatures(guid, input_ids, input_mask, segment_ids, sub_word_masks, orig_to_tok_map, label_id))
 
-    return features, token_tags
+    return features, token_pos, token_ner
 
 
 def convert_multi_examples_to_features(examples, label_list, max_seq_length, tokenizer):
@@ -943,28 +903,8 @@ def convert_multi_examples_to_features(examples, label_list, max_seq_length, tok
 
         for j in range(size):
             choice = tokenizer.tokenize(example.choices[j])
-            # Modifies `tokens_a` and `tokens_b` in place so that the total
-            # length is less than the specified length.
-            # Account for [CLS], [SEP], [SEP] with "- 3"
             _truncate_seq_pair(premise, choice, max_seq_length - 3)
-        # The convention in BERT is:
-        # (a) For sequence pairs:
-        #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
-        #  type_ids: 0   0  0    0    0     0       0 0    1  1  1  1   1 1
-        # (b) For single sequences:
-        #  tokens:   [CLS] the dog is hairy . [SEP]
-        #  type_ids: 0   0   0   0  0     0 0
-        #
-        # Where "type_ids" are used to indicate whether this is the first
-        # sequence or the second sequence. The embedding vectors for `type=0` and
-        # `type=1` were learned during pre-training and are added to the wordpiece
-        # embedding vector (and position vector). This is not *strictly* necessary
-        # since the [SEP] token unambigiously separates the sequences, but it makes
-        # it easier for the model to learn the concept of sequences.
-        #
-        # For classification tasks, the first vector (corresponding to [CLS]) is
-        # used as as the "sentence vector". Note that this only makes sense because
-        # the entire model is fine-tuned.
+
             tokens = ["[CLS]"] + premise + ["[SEP]"]
             segment_ids = [0] * len(tokens)
 

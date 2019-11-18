@@ -326,8 +326,11 @@ def main(args):
 
         eval_task_name = all_tasks[-1]
         logger.info('*** Start evaluating for {} ***'.format(eval_task_name))
-        return_tags = args.save_tpr_attentions
-        processor = PROCESSORS[eval_task_name.lower()](args.num_ex, return_tags)
+
+        return_pos_tags = args.return_POS
+        return_ner_tags = args.return_NER
+
+        processor = PROCESSORS[eval_task_name.lower()](args.num_ex)
         num_labels = NUM_LABELS_TASK[eval_task_name.lower()]
         task_type = TASK_TYPE[eval_task_name.lower()]
         label_list = None
@@ -343,25 +346,10 @@ def main(args):
         #prepare data
         split = args.data_split_attention if args.save_tpr_attentions else 'dev'
 
-        return_vals = prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer,
-                                              split=split, single_sentence=args.single_sentence, return_tags=return_tags)
-        if len(return_vals) == 1:
-            eval_dataloader = return_vals[0]
-        elif len(return_vals) == 2 and args.save_tpr_attentions:
-            eval_dataloader, token_tags = return_vals
-        elif len(return_vals) == 2 and split == 'test':
-            eval_dataloader, all_guids = return_vals
-        else:
-            eval_dataloader, all_guids, token_tags = return_vals
-
-        # tags = []
-        # if args.get_POS:
-        #
-        #     from nltk.tag import StanfordPOSTagger
-        #     pos_tagger = StanfordPOSTagger(args.stanford_model, args.stanford_jar, encoding='utf8')
-        #     for input_ids, input_mask, segment_ids, sub_word_masks, orig_to_token_maps, label_ids in tqdm(eval_dataloader, desc="tagging"):
-        #         tags[input_ids] = pos_tagger.tag(input_ids)
-        #
+        eval_dataloader, all_guids, token_pos, token_ner = \
+            prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1],
+                                tokenizer, split=split, return_pos_tags=return_pos_tags,
+                                return_ner_tags=return_ner_tags, single_sentence=args.single_sentence)
 
         states = torch.load(output_model_file, map_location=device)
         model_state_dict = states['state_dict']
@@ -407,26 +395,35 @@ def main(args):
         if args.save_tpr_attentions:
             output_attention_file = os.path.join(*[args.output_dir, eval_task_name, "tpr_attention.txt"])
             vals = {}
-            if args.single_sentence:
-                tags = [[subval[0] for subval in val[0]] for val in token_tags]
-                tokens = [[subval[1] for subval in val[0]] for val in token_tags]
+            if args.single_sentence or eval_task_name.lower() in ['sst', 'cola']:
+                tokens = [[subval[0] for subval in val[0]] for val in token_pos]
+                pos_tags = [[subval[1] for subval in val[0]] for val in token_pos]
+                ner_tags = [[subval[1] for subval in val[0]] for val in token_ner]
             else:
-                tags = []
                 tokens = []
-                tags_a = [[subval[0] for subval in val[0]] for val in token_tags]
-                tokens_a = [[subval[1] for subval in val[0]] for val in token_tags]
-                tags_b = [[subval[0] for subval in val[1]] for val in token_tags]
-                tokens_b = [[subval[1] for subval in val[1]] for val in token_tags]
-                for tag_a, tag_b, token_a, token_b in zip(tags_a, tags_b, tokens_a, tokens_b):
-                    tags.append(tag_a + ['SEP'] + tag_b)
+                pos_tags = []
+                ner_tags = []
+                tokens_a = [[subval[0] for subval in val[0]] for val in token_pos]
+                pos_tags_a = [[subval[1] for subval in val[0]] for val in token_pos]
+                ner_tags_a = [[subval[1] for subval in val[0]] for val in token_ner]
+                tokens_b = [[subval[0] for subval in val[1]] for val in token_pos]
+                pos_tags_b = [[subval[1] for subval in val[1]] for val in token_pos]
+                ner_tags_b = [[subval[1] for subval in val[1]] for val in token_ner]
+                for token_a, token_b, pos_tag_a, pos_tag_b, ner_tag_a, ner_tag_b in zip(tokens_a, tokens_b, pos_tags_a, pos_tags_b, ner_tags_a, ner_tags_b):
                     tokens.append(token_a + ['[SEP]'] + token_b)
+                    pos_tags.append(pos_tag_a + ['SEP'] + pos_tag_b)
+                    ner_tags.append(ner_tag_a + ['[SEP]'] + ner_tag_b)
+
             bad_sents_count = 0
             for i in range(len(all_ids)):
                 try:
-                    assert len(tokens[i]) == len(tags[i]) == len(F_list[i]) == len(R_list[i])
-                    vals[all_ids[i]] = {'all_aFs': F_list[i], 'all_aRs': R_list[i], 'tokens': tokens[i], 'tags': tags[i]}
+                    assert len(tokens[i]) == len(pos_tags[i]) == len(F_list[i]) == len(R_list[i])
+                    val_i = {'tokens': tokens[i], 'pos_tags': pos_tags[i], 'all_aFs': F_list[i], 'all_aRs': R_list[i]}
+                    if return_ner_tags:
+                        assert len(ner_tags[i]) == len(tokens[i])
+                        val_i.update({'ner_tags': ner_tags[i]})
+                    vals[all_ids[i]] = val_i
                 except:
-                    # import pdb; pdb.set_trace()
                     bad_sents_count += 1
             logger.info('Could not parse {} sentences out of all {} data points'.format(bad_sents_count, len(all_ids)))
 
@@ -505,7 +502,8 @@ def main(args):
             # prepare test data
             for k in test_examples.keys():
 
-                test_dataloader, all_guids = prepare_data_loader(args, processor, label_list, task_type, test_task_name, tokenizer, split='test', examples=test_examples)
+                test_dataloader, all_guids = prepare_data_loader(args, processor, label_list, task_type, test_task_name,
+                                                                 tokenizer, split='test', examples=test_examples)
 
                 result = predict(args, model, test_dataloader, all_guids, device, task_type)
 
