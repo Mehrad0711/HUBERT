@@ -99,6 +99,14 @@ def define_args():
                         default=2,
                         type=int,
                         help="Total number of training epochs to perform.")
+    parser.add_argument("--patience",
+                        default=6,
+                        type=int,
+                        help="Number of epochs to allow no further accuracy improvement.")
+    parser.add_argument("--tolerance",
+                        default=0.0005,
+                        type=float,
+                        help="Margin for accuracy improvement")
     parser.add_argument("--warmup_proportion",
                         default=0.1,
                         type=float,

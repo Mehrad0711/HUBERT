@@ -110,8 +110,11 @@ def main(args, logger):
             global_step = 0
             best_eval_accuracy = -float('inf')
             best_model = None
+            last_update = 0
 
             train_dataloader = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='train')[0]
+
+
 
             for epoch in trange(int(args.num_train_epochs), desc="Epoch"):
                 model.train()
@@ -194,6 +197,12 @@ def main(args, logger):
                             tensorboard_writer.add_scalar('eval/accuracy', result[key], global_step)
                         logger.info("  %s = %s", key, str(result[key]))
 
+                    if result['eval_accuracy'] - best_eval_accuracy > args.tolerance:
+                        last_update = epoch
+                    if last_update + args.patience <= epoch:
+                        logger.info("*** Model accuracy has not improved for {} consecutive epochs. Stopping training...***".format(args.patience))
+                        break
+
                     if result['eval_accuracy'] >= best_eval_accuracy:
                         best_eval_accuracy = result['eval_accuracy']
                         best_model = model
@@ -204,6 +213,8 @@ def main(args, logger):
                         logger.info("Saving checkpoint pytorch_model_best.bin to {}".format(output_model_file))
                         torch.save({'state_dict': model_to_save.state_dict(), 'options': opt, 'bert_config': bert_config}, output_model_file)
 
+
+            # for continual learning
             if args.do_prev_eval:
                 if best_model is None:
                     best_model = model
