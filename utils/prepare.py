@@ -103,9 +103,9 @@ def prepare_optim(args, num_train_steps, param_optimizer):
                                  correct_bias=False)
             scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_proportion * t_total, t_total=t_total)
 
-        elif args.optimizer == 'radam':
-            optimizer = RAdam(optimizer_grouped_parameters,
-                                 lr=args.learning_rate)
+        # elif args.optimizer == 'radam':
+        #     optimizer = RAdam(optimizer_grouped_parameters,
+        #                          lr=args.learning_rate)
         elif args.optimizer == 'sgd':
             optimizer = SGD(optimizer_grouped_parameters,
                                  lr=args.learning_rate)

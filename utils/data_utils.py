@@ -14,10 +14,15 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s
 logger = logging.getLogger(__name__)
 
 args = define_args()
-pos_tagger = StanfordPOSTagger(args.pos_tagger_model, args.pos_tagger_jar)
-ner_tagger = StanfordNERTagger(args.ner_tagger_model, args.ner_tagger_jar)
-dep_parser = StanfordDependencyParser(args.dep_parser_model, args.dep_parser_jar)
-const_parser = benepar.Parser("benepar_en2")
+
+if args.return_POS:
+    pos_tagger = StanfordPOSTagger(args.pos_tagger_model, args.pos_tagger_jar)
+if args.return_NER:
+    ner_tagger = StanfordNERTagger(args.ner_tagger_model, args.ner_tagger_jar)
+if args.return_DEP:
+    dep_parser = StanfordDependencyParser(args.dep_parser_model, args.dep_parser_jar)
+if args.return_CONST:
+    const_parser = benepar.Parser("benepar_en2")
 
 
 def get_constituency_path_to_root(tree, leaf_index):
@@ -274,6 +279,21 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         example.const_parsed_a = const_parsed_a
         if const_parsed_b:
             example.const_parsed_b = const_parsed_b
+
+
+        if return_const_parse:
+            const_parsed_a = []
+            leaves_a = example.const_parsed_a.leaves()
+            for i in range(len(leaves_a)):
+                const_parsed_a.append((leaves_a[i], get_constituency_path_to_root(example.const_parsed_a, i)))
+            if example.const_parsed_b:
+                const_parsed_b = []
+                leaves_b = example.const_parsed_b.leaves()
+                for i in range(len(leaves_b)):
+                    const_parsed_b.append((leaves_b[i], get_constituency_path_to_root(example.const_parsed_b, i)))
+            example.const_parsed_a = const_parsed_a
+            if const_parsed_b:
+                example.const_parsed_b = const_parsed_b
 
 
         if example.pos_tagged_a:

@@ -5,6 +5,8 @@ import re
 import nltk
 from collections import defaultdict
 from utils.data_utils import InputExample, MultiInputExample
+from utils.data_utils import logger
+
 
 class DataProcessor(object):
     """Base class for data converters for sequence classification data sets."""
