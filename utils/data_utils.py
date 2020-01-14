@@ -4,11 +4,14 @@ import logging
 import os
 from collections import defaultdict
 import nltk
-from nltk.tag import StanfordPOSTagger, StanfordNERTagger
+from nltk.tag.stanford import StanfordPOSTagger, StanfordNERTagger
+from nltk.parse.stanford import StanfordDependencyParser
 import re
 from arguments import define_args
+import benepar
 
 nltk.download('punkt')
+benepar.download('benepar_en2')
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
@@ -16,13 +19,35 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s
 logger = logging.getLogger(__name__)
 
 args = define_args()
-pos_tagger = StanfordPOSTagger(args.stanford_pos_model, args.stanford_pos_jar)
-ner_tagger = StanfordNERTagger(args.stanford_ner_model, args.stanford_ner_jar)
+pos_tagger = StanfordPOSTagger(args.pos_tagger_model, args.pos_tagger_jar)
+ner_tagger = StanfordNERTagger(args.ner_tagger_model, args.ner_tagger_jar)
+dep_parser = StanfordDependencyParser(args.dep_parser_model, args.dep_parser_jar)
+const_parser = benepar.Parser("benepar_en2")
+
+
+def get_constituency_path_to_root(tree: nltk.Tree, leaf_index: int):
+
+    parented_tree = nltk.tree.ParentedTree.convert(tree)
+    labels = []
+    path_to_leaf = parented_tree.leaf_treeposition(leaf_index)
+    path_to_leaf_POS = path_to_leaf[:-1]
+
+    current, is_root = parented_tree[path_to_leaf_POS], False
+
+    while current is not None:
+
+        labels.append(current.label())
+        current = current.parent()
+
+    return labels[:-1]
+
 
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
 
-    def __init__(self, guid, text_a, text_b=None, label=None, parsed_a=None, parsed_b=None, ner_a=None, ner_b=None):
+    def __init__(self, guid, text_a, text_b=None, label=None,
+                 pos_tagged_a=None, pos_tagged_b=None, ner_tagged_a=None, ner_tagged_b=None,
+                 dep_parsed_a=None, dep_parsed_b=None, const_parsed_a=None, const_parsed_b=None):
         """Constructs a InputExample.
 
         Args:
@@ -38,10 +63,14 @@ class InputExample(object):
         self.text_a = text_a
         self.text_b = text_b
         self.label = label
-        self.parsed_a = parsed_a
-        self.parsed_b = parsed_b
-        self.ner_a = ner_a
-        self.ner_b = ner_b
+        self.pos_tagged_a = pos_tagged_a
+        self.pos_tagged_b = pos_tagged_b
+        self.ner_tagged_a = ner_tagged_a
+        self.ner_tagged_b = ner_tagged_b
+        self.dep_parsed_a = dep_parsed_a
+        self.dep_parsed_b = dep_parsed_b
+        self.const_parsed_a = const_parsed_a
+        self.const_parsed_b = const_parsed_b
 
 class MultiInputExample(object):
     """A single training/test example for more complex sequence classification tasks (e,g, SuperGLUE)."""
@@ -247,12 +276,17 @@ class SNLIProcessor(DataProcessor):
             else:
                 label = line[-1]
 
-            text_a_parsed = re.findall(r'\([^\)\(]*\)', line[5])
-            text_a_parsed = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in text_a_parsed]
-            text_b_parsed = re.findall(r'\([^\)\(]*\)', line[6])
-            text_b_parsed = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in text_b_parsed]
+            const_parsed_a = line[5]
+            const_parsed_b = line[6]
+
+            pos_tagged_a = re.findall(r'\([^\)\(]*\)', const_parsed_a)
+            pos_tagged_a = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in pos_tagged_a]
+            pos_tagged_b = re.findall(r'\([^\)\(]*\)', const_parsed_b)
+            pos_tagged_b = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in pos_tagged_b]
+
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label,
+                             pos_tagged_a=pos_tagged_a, pos_tagged_b=pos_tagged_b, const_parsed_a=const_parsed_a, const_parsed_b=const_parsed_b))
         return examples
 
 class HANSProcessor(DataProcessor):
@@ -336,13 +370,17 @@ class MNLIProcessor(DataProcessor):
             else:
                 label = line[-1]
 
-            text_a_parsed = re.findall(r'\([^\)\(]*\)', line[6])
-            text_a_parsed = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in text_a_parsed]
-            text_b_parsed = re.findall(r'\([^\)\(]*\)', line[7])
-            text_b_parsed = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in text_b_parsed]
+            const_parsed_a = line[6]
+            const_parsed_b = line[7]
+
+            pos_tagged_a = re.findall(r'\([^\)\(]*\)', const_parsed_a)
+            pos_tagged_a = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in pos_tagged_a]
+            pos_tagged_b = re.findall(r'\([^\)\(]*\)', const_parsed_b)
+            pos_tagged_b = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in pos_tagged_b]
 
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label, parsed_a=text_a_parsed, parsed_b=text_b_parsed))
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label,
+                             pos_tagged_a=pos_tagged_a, pos_tagged_b=pos_tagged_b, const_parsed_a=const_parsed_a, const_parsed_b=const_parsed_b))
         return examples
 
 
@@ -742,8 +780,8 @@ class COPAProcessor(DataProcessor):
         return examples
 
 
-def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer,
-                                 single_sentence=False, return_pos_tags=False, return_ner_tags=False):
+def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer, single_sentence=False,
+                                 return_pos_tags=False, return_ner_tags=False, return_dep_parse=False, return_const_parse=False):
     """Loads a data file into a list of `InputBatch`s."""
 
     label_map = None
@@ -751,8 +789,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         label_map = {label: i for i, label in enumerate(label_list)}
 
     features = []
-    token_pos = []
-    token_ner = []
+
     for (ex_index, example) in enumerate(examples):
 
         do_lower = tokenizer.basic_tokenizer.do_lower_case
@@ -840,29 +877,50 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             else:
                 label_id = None
 
-        return_pos_tags = return_pos_tags
-        return_ner_tags = return_ner_tags
+        # extract structure information
+        token_pos = []
+        token_ner = []
+        token_dep = []
+        token_const = []
 
-        if return_pos_tags and not example.parsed_a:
-            example.parsed_a = pos_tagger.tag(tokens_a)
+        if return_pos_tags and not example.pos_tagged_a:
+            example.pos_tagged_a = pos_tagger.tag(tokens_a)
             if tokens_b:
-                example.parsed_b = pos_tagger.tag(tokens_b)
+                example.pos_tagged_b = pos_tagger.tag(tokens_b)
         if return_ner_tags:
-            example.ner_a = ner_tagger.tag(nltk.word_tokenize(example.text_a))
+            # for NER tokenize without lower casing the words
+            example.ner_tagged_a = ner_tagger.tag(nltk.word_tokenize(example.text_a))
             if tokens_b:
-                example.ner_b = ner_tagger.tag(nltk.word_tokenize(example.text_b))
+                example.ner_tagged_b = ner_tagger.tag(nltk.word_tokenize(example.text_b))
+        if return_dep_parse and not example.dep_parsed_a:
+            example.dep_parsed_a = dep_parser.parse(tokens_a)
+            if tokens_b:
+                example.dep_parsed_b = dep_parser.parse(tokens_b)
+        if return_const_parse and not example.const_parsed_a:
+            example.const_parsed_a = const_parser.parse(tokens_a)
+            if tokens_b:
+                example.const_parsed_b = const_parser.parse(tokens_b)
 
-        if example.parsed_a:
-            if example.parsed_b and not single_sentence:
-                token_pos.append((example.parsed_a, example.parsed_b))
+        if example.pos_tagged_a:
+            if example.pos_tagged_b and not single_sentence:
+                token_pos.append((example.pos_tagged_a, example.pos_tagged_b))
             else:
-                token_pos.append((example.parsed_a,))
-
-        if example.ner_a:
-            if example.ner_b and not single_sentence:
-                token_ner.append((example.ner_a, example.ner_b))
+                token_pos.append((example.pos_tagged_a,))
+        if example.ner_tagged_a:
+            if example.ner_tagged_b and not single_sentence:
+                token_ner.append((example.ner_tagged_a, example.ner_tagged_b))
             else:
-                token_ner.append((example.ner_a,))
+                token_ner.append((example.ner_tagged_a,))
+        if example.dep_parsed_a:
+            if example.dep_parsed_b and not single_sentence:
+                token_dep.append((example.dep_parsed_a, example.dep_parsed_b))
+            else:
+                token_dep.append((example.dep_parsed_q,))
+        if example.const_parsed_a:
+            if example.const_parsed_b and not single_sentence:
+                token_const.append((example.const_parsed_a, example.const_parsed_b))
+            else:
+                token_const.append((example.const_parsed_a,))
 
         guid = example.guid
         if ex_index < 5:
@@ -874,13 +932,15 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
             logger.info(
                 "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-            for key in ['label', 'parsed_a', 'parsed_b', 'ner_a', 'ner_b']:
+            for key in ['label', 'pos_tagged_a', 'pos_tagged_b', 'ner_tagged_a', 'ner_tagged_b',
+                        'dep_parsed_a', 'dep_parsed_b', 'const_parsed_a', 'const_parsed_b']:
                 if getattr(example, key, None):
                     logger.info("{}: {}".format(key, getattr(example, key)))
 
         features.append(InputFeatures(guid, input_ids, input_mask, segment_ids, sub_word_masks, orig_to_tok_map, label_id))
 
-    return features, token_pos, token_ner
+    structure_features = (token_pos, token_ner, token_dep, token_const)
+    return features, structure_features
 
 
 def convert_multi_examples_to_features(examples, label_list, max_seq_length, tokenizer):

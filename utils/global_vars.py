@@ -51,3 +51,26 @@ TASK_TYPE = {
  'cola': 0,
  'copa': 0
 }
+
+POS_TAGS_MAP = {
+            'VB': ['VB', 'VBD', 'VBG', 'VBN', 'VBP', 'VBZ'], # verb
+            'RB': ['RB', 'RBR', 'RBS', 'WRB', '-LRB-', '-RRB-'], # adverb
+            'PRP': ['PRP', 'PRP$', 'WP', 'WP$'], # pronoun
+            'NN': ['NN', 'NNS', 'NNP', 'NNPS'], # noun
+            'DT': ['DT', 'WDT'], # determiner
+            'JJ': ['JJ', 'JJR', 'JJS'], #adjective
+            'MD': ['MD'], # modal
+            'CC': ['CC', 'IN'], # conjunction
+            'CD': ['CD'], # Cardinal number
+            'EX': ['EX'], # Existential there
+            'FW': ['FW'], #Foreign word
+            '$': ['$', '``', "''", 'SYM'], # $ sign, quotation marks, symbols, double colon
+            '.': ['.', ':', ','], # punctuation
+            'RP': ['RP'], # particle
+            'TO': ['TO'], # to
+            'UH': ['UH'], # interjection
+            'PDT': ['PDT'], # Predeterminer
+            'LS': ['LS'], # List item marker
+            'POS': ['POS'], # Possessive ending
+            'SEP': ['SEP'] # SEP token
+            }

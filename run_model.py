@@ -35,6 +35,8 @@ from transformers.configuration_bert import PretrainedConfig
 
 from tqdm import tqdm, trange
 
+from utils.visualization import perform_tsne
+
 from arguments import define_args
 from utils.global_vars import PROCESSORS, NUM_LABELS_TASK, TASK_TYPE
 from modules.model import BertForSequenceClassification_tpr
@@ -260,6 +262,8 @@ def main(args, logger):
 
         return_pos_tags = args.return_POS
         return_ner_tags = args.return_NER
+        return_dep_parse = args.return_DEP
+        return_const_parse = args.return_CONST
 
         processor = PROCESSORS[eval_task_name.lower()](args.num_ex)
         num_labels = NUM_LABELS_TASK[eval_task_name.lower()]
@@ -277,10 +281,11 @@ def main(args, logger):
         #prepare data
         split = args.data_split_attention if args.save_tpr_attentions else 'dev'
 
-        eval_dataloader, all_guids, token_pos, token_ner = \
-            prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1],
-                                tokenizer, split=split, return_pos_tags=return_pos_tags,
-                                return_ner_tags=return_ner_tags, single_sentence=args.single_sentence)
+        eval_dataloader, all_guids, structure_features = \
+                    prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer,
+                                single_sentence=args.single_sentence, split=split, return_pos_tags=return_pos_tags,
+                                return_ner_tags=return_ner_tags, return_dep_parse=return_dep_parse, return_const_parse=return_const_parse)
+        token_pos, token_ner, token_dep, token_const = structure_features
 
         states = torch.load(output_model_file, map_location=device)
         model_state_dict = states['state_dict']
@@ -330,6 +335,7 @@ def main(args, logger):
                 tokens = [[subval[0] for subval in val[0]] for val in token_pos]
                 pos_tags = [[subval[1] for subval in val[0]] for val in token_pos]
                 ner_tags = [[subval[1] for subval in val[0]] for val in token_ner]
+
             else:
                 tokens = []
                 pos_tags = []
@@ -340,15 +346,17 @@ def main(args, logger):
                 tokens_b = [[subval[0] for subval in val[1]] for val in token_pos]
                 pos_tags_b = [[subval[1] for subval in val[1]] for val in token_pos]
                 ner_tags_b = [[subval[1] for subval in val[1]] for val in token_ner]
-                for token_a, token_b, pos_tag_a, pos_tag_b, ner_tag_a, ner_tag_b in zip(tokens_a, tokens_b, pos_tags_a, pos_tags_b, ner_tags_a, ner_tags_b):
+                for token_a, token_b in zip(tokens_a, tokens_b):
                     tokens.append(token_a + ['[SEP]'] + token_b)
+                for pos_tag_a, pos_tag_b in zip(pos_tags_a, pos_tags_b):
                     pos_tags.append(pos_tag_a + ['SEP'] + pos_tag_b)
+                for ner_tag_a, ner_tag_b in zip(ner_tags_a, ner_tags_b):
                     ner_tags.append(ner_tag_a + ['[SEP]'] + ner_tag_b)
 
             bad_sents_count = 0
             for i in range(len(all_ids)):
                 try:
-                    assert len(tokens[i])  == len(F_list[i]) == len(R_list[i])
+                    assert len(tokens[i]) == len(F_list[i]) == len(R_list[i])
                     val_i = {'tokens': tokens[i], 'all_aFs': F_list[i], 'all_aRs': R_list[i]}
                     if return_pos_tags:
                         assert len(pos_tags[i]) == len(tokens[i])
@@ -359,7 +367,9 @@ def main(args, logger):
                     vals[all_ids[i]] = val_i
                 except:
                     bad_sents_count += 1
-            logger.info('Could not parse {} sentences out of all {} data points'.format(bad_sents_count, len(all_ids)))
+            logger.info('Could not parse {:.2f}% of the sentences out of all {} data points'.format(bad_sents_count/ len(all_ids)*100,  len(all_ids)))
+
+            perform_tsne(args, vals)
 
             logger.info('saving tpr_attentions to {} '.format(output_attention_file))
             with open(output_attention_file, "w") as fp:

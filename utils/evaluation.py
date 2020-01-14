@@ -2,7 +2,7 @@ import torch
 from tqdm import tqdm
 import logging
 from utils.metrics import class_acc, reg_acc
-import numpy as np
+from utils.visualization import get_attention
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
@@ -30,41 +30,7 @@ def evaluate(args, model, eval_dataloader, device, task_type, global_step=None, 
             logits, tmp_eval_loss, (aFs, aRs) = model(input_ids, segment_ids, input_mask, sub_word_masks, label_ids)
 
         if save_tpr_attentions:
-
-            if args.save_strategy == 'sample':
-                for i, (aF_full, aR_all) in enumerate(zip(aFs, aRs)):
-                    input_F = []
-                    input_R = []
-                    for aF, aR in zip(aF_full, aR_all):
-                        aF, aR = np.array(aF.cpu()), np.array(aR.cpu())
-                        idx_F = np.random.choice(np.arange(len(aF)), size=1, p=aF/aF.sum())[0]
-                        idx_R = np.random.choice(np.arange(len(aR)), size=1, p=aR/aR.sum())[0]
-                        input_F.append(idx_F)
-                        input_R.append(idx_R)
-
-                    map = orig_to_token_maps[i]
-                    index = map.tolist().index(-1)
-                    orig_to_token_maps_unpadded = map[:index]
-                    # dim=0 is seq_length
-                    # remove first and last token corresponding to [CLS] and [SEP] tokens
-                    F_list.append(torch.index_select(torch.tensor(input_F).type(aFs.type()), dim=0, index=orig_to_token_maps_unpadded).detach().cpu().tolist()[1:-1])
-                    R_list.append(torch.index_select(torch.tensor(input_R).type(aRs.type()), dim=0, index=orig_to_token_maps_unpadded).detach().cpu().tolist()[1:-1])
-
-            else:
-                if args.save_strategy == 'topK':
-                    F_selected = torch.topk(aFs, k=args.K, dim=-1)[1] # choose top K indices
-                    R_selected = torch.topk(aRs, k=args.K, dim=-1)[1] # choose top K indices
-                elif args.save_strategy == 'selectK':
-                    F_selected = torch.topk(aFs, k=args.K, dim=-1)[1][:,:,[-1]] # choose K th best index
-                    R_selected = torch.topk(aRs, k=args.K, dim=-1)[1][:,:,[-1]] # choose K th best index
-                for i, (input_F, input_R) in enumerate(zip(F_selected, R_selected)):
-                    map = orig_to_token_maps[i]
-                    index = map.tolist().index(-1)
-                    orig_to_token_maps_unpadded = map[:index]
-                    # dim=0 is seq_length
-                    # remove first and last token corresponding to [CLS] and [SEP] tokens
-                    F_list.append(torch.index_select(input_F, dim=0, index=orig_to_token_maps_unpadded).detach().cpu().tolist()[1:-1])
-                    R_list.append(torch.index_select(input_R, dim=0, index=orig_to_token_maps_unpadded).detach().cpu().tolist()[1:-1])
+            F_list, R_list = get_attention(args, aFs, aRs, orig_to_token_maps)
 
         logits = logits.detach().cpu().numpy()
         label_ids = label_ids.cpu().numpy()

@@ -16,7 +16,9 @@ def define_args():
 
     parser = argparse.ArgumentParser()
 
-    ## Required parameters
+    ####################
+    ## Required arguments
+    ####################
     parser.add_argument("--data_dir",
                         default=None,
                         type=str,
@@ -37,7 +39,7 @@ def define_args():
                         required=False,
                         help="The output directory where the model predictions and checkpoints will be written.")
 
-    ## Other parameters
+    ## Other arguments
     parser.add_argument("--do_prev_eval",
                         type=str2bool,
                         default=False,
@@ -141,6 +143,16 @@ def define_args():
                         help="Loss scaling to improve fp16 numeric stability. Only used when fp16 set to True.\n"
                              "0 (default value): dynamic loss scaling.\n"
                              "Positive power of 2: static loss scaling value.\n")
+
+    ####################
+    ## Model arguments
+    ####################
+
+    ####################
+    ## TPR arguments
+    ####################
+
+    # model
     parser.add_argument("--nSymbols",
                         default=50,
                         type=int,
@@ -161,6 +173,9 @@ def define_args():
                         default=1.0,
                         type=float,
                         help="softmax temperature for aF and aR")
+
+
+
     parser.add_argument("--sub_word_masking",
                         type=str2bool,
                         default=False,
@@ -174,6 +189,8 @@ def define_args():
                         default='tpr_transformers',
                         choices=['no_enc', 'lstm', 'tpr_lstm', 'tpr_transformers'],
                         help="which encoder to use")
+
+    # model parameters to load during fine-tuning
     parser.add_argument("--load_ckpt",
                         default='',
                         help="path to checkpoint model to load Symbol and Filler matrices")
@@ -205,6 +222,8 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help='load LSTM weight and biases')
+
+
     parser.add_argument("--fixed_Role",
                         type=str2bool,
                         default=False,
@@ -213,6 +232,8 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help='whether to delete the result directory if it already exists')
+
+    # model parameters to freeze during fine-tuning
     parser.add_argument("--freeze_role",
                         type=str2bool,
                         default=False,
@@ -241,11 +262,15 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help='whether to freeze Role/ Filler matrices after loading from a trained model')
+
+
     parser.add_argument("--optimizer",
                         type=str,
                         default='adam',
                         choices=['adam', 'radam', 'sgd'],
                         help='whether to freeze Role/ Filler matrices after loading from a trained model')
+
+
     parser.add_argument("--num_ex",
                         type=float,
                         default=2000000000,
@@ -253,7 +278,7 @@ def define_args():
     parser.add_argument("--debug",
                         type=str2bool,
                         default=False,
-                        help='debug mode')
+                        help='turn on debug mode')
     parser.add_argument("--scale_val",
                         type=float,
                         default=1.0,
@@ -320,32 +345,35 @@ def define_args():
                         type=str,
                         default='v1',
                         help='which classifier to use')
+
+    # model parameters to replace in continual learning setting
     parser.add_argument("--replace_filler",
                         type=str2bool,
                         default=False,
-                        help='when evaluating a model on previous task (in continual learning settings),'
-                             ' replace filler weights with previous values')
+                        help='when evaluating a model on previous task replace filler weights with previous values')
     parser.add_argument("--replace_role",
                         type=str2bool,
                         default=False,
-                        help='when evaluating a model on previous task (in continual learning settings),'
-                             ' replace role weights with previous values')
+                        help='when evaluating a model on previous task replace role weights with previous values')
     parser.add_argument("--replace_filler_selector",
                         type=str2bool,
                         default=False,
-                        help='when evaluating a model on previous task (in continual learning settings),'
-                             ' replace filler selector weights with previous values')
+                        help='when evaluating a model on previous task replace filler selector weights with previous values')
     parser.add_argument("--replace_role_selector",
                         type=str2bool,
                         default=False,
-                        help='when evaluating a model on previous task (in continual learning settings),'
-                             ' replace role selector weights with previous values')
+                        help='when evaluating a model on previous task replace role selector weights with previous values')
+
+
     parser.add_argument("--reset_temp_ratio",
                         type=float,
                         default=1.0,
                         help='set temperature to a smaller value during evaluation and testing')
 
-    # attention arguments
+
+    ####################
+    ## aF and aR attention arguments
+    ####################
     parser.add_argument("--save_tpr_attentions",
                         type=str2bool,
                         default=False,
@@ -354,7 +382,7 @@ def define_args():
                         type=str,
                         default='topK',
                         help='method to retrieve tpr attention values',
-                        choices=['topK', 'sample', 'selectK'])
+                        choices=['topK', 'sample', 'selectK', 'full'])
     parser.add_argument("--data_split_attention",
                         type=str,
                         default='dev',
@@ -368,6 +396,10 @@ def define_args():
                         type=int,
                         default=1,
                         help='choose K biggest value from tpr attentions')
+
+    ####################
+    ## POS and NER
+    ####################
     parser.add_argument("--return_POS",
                         type=str2bool,
                         default=False,
@@ -375,19 +407,60 @@ def define_args():
     parser.add_argument("--return_NER",
                         type=str2bool,
                         default=False,
-                        help='return NE representations for tokens in the input data')
-    parser.add_argument("--stanford_pos_jar",
+                        help='return NER for tokens in the input data')
+    parser.add_argument("--return_DEP",
+                        type=str2bool,
+                        default=False,
+                        help='return dependency-tree edge for tokens in the input data')
+    parser.add_argument("--return_CONST",
+                        type=str2bool,
+                        default=False,
+                        help='return constituency parse paths for tokens in the input data')
+    parser.add_argument("--pos_tagger_jar",
                         default='./scripts/stanford-postagger-3.9.2.jar',
                         help='path to stanford jar file for Stanford POS tagger')
-    parser.add_argument("--stanford_pos_model",
+    parser.add_argument("--pos_tagger_model",
                         default='./scripts/english-bidirectional-distsim.tagger',
                         help='path to stanford model file for Stanford POS tagger')
-    parser.add_argument("--stanford_ner_jar",
+    parser.add_argument("--ner_tagger_jar",
                         default='./scripts/stanford-ner-3.9.2.jar',
                         help='path to stanford jar file for Stanford POS tagger')
-    parser.add_argument("--stanford_ner_model",
+    parser.add_argument("--ner_tagger_model",
                         default='./scripts/english.muc.7class.distsim.crf.ser.gz',
                         help='path to stanford model file for Stanford POS tagger')
+    parser.add_argument("--dep_parser_jar",
+                        default='./scripts/stanford-parser.jar',
+                        help='path to stanford jar file for Stanford POS tagger')
+    parser.add_argument("--dep_parser_model",
+                        default='./scripts/stanford-parser-3.9.2-models.jar',
+                        help='path to stanford model file for Stanford POS tagger')
+
+    ####################
+    ## T-SNE and K-means
+    ####################
+    parser.add_argument("--metric",
+                        type=str,
+                        default='euclidean',
+                        help='T-SNE distance metric')
+    parser.add_argument("--n_jobs",
+                        type=int,
+                        default=4,
+                        help='T-SNE Number of threads'
+                        )
+    parser.add_argument("--n_components",
+                        type=int,
+                        default=2,
+                        help='T-SNE dimensionality')
+    parser.add_argument("--n_iter",
+                        type=int,
+                        default=1000,
+                        help='T-SNE number of iterations')
+    parser.add_argument("--n_clusters",
+                        type=int,
+                        default=10,
+                        help='K-means number of clusters')
+
+
 
     args = parser.parse_args()
 

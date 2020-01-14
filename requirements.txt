@@ -10,3 +10,5 @@ tqdm
 boto3
 nltk
 seaborn
+MulticoreTSNE
+git+https://github.com/drusk/pml.git
