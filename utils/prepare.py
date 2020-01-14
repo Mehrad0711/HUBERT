@@ -3,9 +3,10 @@ from __future__ import division
 from __future__ import print_function
 
 import torch
+import os
 
 from modules.model import BertForSequenceClassification_tpr
-from utils.data_utils import *
+from utils.data_utils import convert_examples_to_features, logger
 from transformers.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from transformers.modeling_bert import BertModel
 from transformers.optimization import AdamW, WarmupLinearSchedule
@@ -215,3 +216,84 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
         model = torch.nn.DataParallel(model)
 
     return model, bert_config
+
+
+def prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, token_pos, token_ner, token_dep, token_const):
+
+    values = {}
+    if args.single_sentence or eval_task_name.lower() in ['sst', 'cola']:
+        index = 0
+        tokens = [[subval[0] for subval in val[index]] for val in token_pos]
+        pos_tags = [[subval[1] for subval in val[index]] for val in token_pos]
+        ner_tags = [[subval[1] for subval in val[index]] for val in token_ner]
+        dep_parse_tokens = [[subval[0] for subval in val[index]] for val in token_dep]
+        dep_parses = [[subval[1] for subval in val[index]] for val in token_dep]
+        const_parses = [[subval[1] for subval in val[index]] for val in token_const]
+        parse_tree_depths = [[len(subval[1]) for subval in val[index]] for val in token_const]
+
+    else:
+        tokens = []
+        pos_tags = []
+        ner_tags = []
+        dep_parse_tokens = []
+        dep_parse = []
+        const_parse = []
+        parse_tree_depth = []
+        index = 0
+        tokens_a = [[subval[0] for subval in val[index]] for val in token_pos]
+        pos_tags_a = [[subval[1] for subval in val[index]] for val in token_pos]
+        ner_tags_a = [[subval[1] for subval in val[index]] for val in token_ner]
+        dep_parse_tokens_a = [[subval[0] for subval in val[index]] for val in token_dep]
+        dep_parses_a = [[subval[1] for subval in val[index]] for val in token_dep]
+        const_parses_a = [[subval[1] for subval in val[index]] for val in token_const]
+        parse_tree_depths_a = [[len(subval[1]) for subval in val[index]] for val in token_const]
+        index = 1
+        tokens_b = [[subval[0] for subval in val[index]] for val in token_pos]
+        pos_tags_b = [[subval[1] for subval in val[index]] for val in token_pos]
+        ner_tags_b = [[subval[1] for subval in val[index]] for val in token_ner]
+        dep_parse_tokens_b = [[subval[0] for subval in val[index]] for val in token_dep]
+        dep_parses_b = [[subval[1] for subval in val[index]] for val in token_dep]
+        const_parses_b = [[subval[1] for subval in val[index]] for val in token_const]
+        parse_tree_depths_b = [[len(subval[1]) for subval in val[index]] for val in token_const]
+
+        for token_a, token_b in zip(tokens_a, tokens_b):
+            tokens.append(token_a + ['[SEP]'] + token_b)
+        for pos_tag_a, pos_tag_b in zip(pos_tags_a, pos_tags_b):
+            pos_tags.append(pos_tag_a + ['SEP'] + pos_tag_b)
+        for ner_tag_a, ner_tag_b in zip(ner_tags_a, ner_tags_b):
+            ner_tags.append(ner_tag_a + ['[SEP]'] + ner_tag_b)
+        for dep_parse_token_a, dep_parse_token_b in zip(dep_parse_tokens_a, dep_parse_tokens_b):
+            dep_parse_tokens.append(dep_parse_token_a + ['[SEP]'] + dep_parse_token_b)
+        for dep_parse_a, dep_parse_b in zip(dep_parses_a, dep_parses_b):
+            dep_parse.append(dep_parse_a + ['[SEP]'] + dep_parse_b)
+        for const_parse_a, const_parse_b in zip(const_parses_a, const_parses_b):
+            const_parse.append(const_parse_a + ['[SEP]'] + const_parse_b)
+        for parse_tree_depth_a, parse_tree_depth_b in zip(parse_tree_depths_a, parse_tree_depths_b):
+            parse_tree_depth.append(parse_tree_depth_a + ['[SEP]'] + parse_tree_depth_b)
+
+    bad_sents_count = 0
+    for i in range(len(all_ids)):
+        try:
+            assert len(tokens[i]) == len(F_list[i]) == len(R_list[i])
+            val_i = {'tokens': tokens[i], 'all_aFs': F_list[i], 'all_aRs': R_list[i]}
+            if args.return_POS:
+                assert len(pos_tags[i]) == len(tokens[i])
+                val_i.update({'pos_tags': pos_tags[i]})
+            if args.return_NER:
+                assert len(ner_tags[i]) == len(tokens[i])
+                val_i.update({'ner_tags': ner_tags[i]})
+            if args.return_DEP:
+                assert len(dep_parse_tokens[i]) == len(dep_parse[i])
+                val_i.update({'dep_parse_tokens': dep_parse_tokens[i],'dep_edge': dep_parse[i]})
+            if args.return_CONST:
+                assert len(const_parse[i]) == len(tokens[i])
+                val_i.update({'cont_parse_path': const_parse[i]})
+                assert len(parse_tree_depth[i]) == len(tokens[i])
+                val_i.update({'tree_depth': parse_tree_depth[i]})
+
+            values[all_ids[i]] = val_i
+        except:
+            bad_sents_count += 1
+    logger.info('Could not parse {:.2f}% of the sentences out of all {} data points'.format(bad_sents_count/ len(all_ids)*100,  len(all_ids)))
+
+    return values

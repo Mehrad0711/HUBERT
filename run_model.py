@@ -42,7 +42,7 @@ from utils.global_vars import PROCESSORS, NUM_LABELS_TASK, TASK_TYPE
 from modules.model import BertForSequenceClassification_tpr
 from utils.evaluation import evaluate
 from utils.prediction import predict
-from utils.prepare import prepare_data_loader, prepare_model, prepare_optim
+from utils.prepare import prepare_data_loader, prepare_model, prepare_optim, prepare_structure_values
 from utils.model_utils import modify_model, decay
 
 import warnings
@@ -282,9 +282,9 @@ def main(args, logger):
         split = args.data_split_attention if args.save_tpr_attentions else 'dev'
 
         eval_dataloader, all_guids, structure_features = \
-                    prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer,
-                                single_sentence=args.single_sentence, split=split, return_pos_tags=return_pos_tags,
-                                return_ner_tags=return_ner_tags, return_dep_parse=return_dep_parse, return_const_parse=return_const_parse)
+                            prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer,
+                                single_sentence=args.single_sentence, split=split, return_pos_tags=args.return_POS,
+                                return_ner_tags=args.return_NER, return_dep_parse=args.return_DEP, return_const_parse=args.return_CONST)
         token_pos, token_ner, token_dep, token_const = structure_features
 
         states = torch.load(output_model_file, map_location=device)
@@ -330,45 +330,8 @@ def main(args, logger):
 
         if args.save_tpr_attentions:
             output_attention_file = os.path.join(*[args.output_dir, eval_task_name, "tpr_attention.txt"])
-            vals = {}
-            if args.single_sentence or eval_task_name.lower() in ['sst', 'cola']:
-                tokens = [[subval[0] for subval in val[0]] for val in token_pos]
-                pos_tags = [[subval[1] for subval in val[0]] for val in token_pos]
-                ner_tags = [[subval[1] for subval in val[0]] for val in token_ner]
-
-            else:
-                tokens = []
-                pos_tags = []
-                ner_tags = []
-                tokens_a = [[subval[0] for subval in val[0]] for val in token_pos]
-                pos_tags_a = [[subval[1] for subval in val[0]] for val in token_pos]
-                ner_tags_a = [[subval[1] for subval in val[0]] for val in token_ner]
-                tokens_b = [[subval[0] for subval in val[1]] for val in token_pos]
-                pos_tags_b = [[subval[1] for subval in val[1]] for val in token_pos]
-                ner_tags_b = [[subval[1] for subval in val[1]] for val in token_ner]
-                for token_a, token_b in zip(tokens_a, tokens_b):
-                    tokens.append(token_a + ['[SEP]'] + token_b)
-                for pos_tag_a, pos_tag_b in zip(pos_tags_a, pos_tags_b):
-                    pos_tags.append(pos_tag_a + ['SEP'] + pos_tag_b)
-                for ner_tag_a, ner_tag_b in zip(ner_tags_a, ner_tags_b):
-                    ner_tags.append(ner_tag_a + ['[SEP]'] + ner_tag_b)
-
-            bad_sents_count = 0
-            for i in range(len(all_ids)):
-                try:
-                    assert len(tokens[i]) == len(F_list[i]) == len(R_list[i])
-                    val_i = {'tokens': tokens[i], 'all_aFs': F_list[i], 'all_aRs': R_list[i]}
-                    if return_pos_tags:
-                        assert len(pos_tags[i]) == len(tokens[i])
-                        val_i.update({'pos_tags': pos_tags[i]})
-                    if return_ner_tags:
-                        assert len(ner_tags[i]) == len(tokens[i])
-                        val_i.update({'ner_tags': ner_tags[i]})
-                    vals[all_ids[i]] = val_i
-                except:
-                    bad_sents_count += 1
-            logger.info('Could not parse {:.2f}% of the sentences out of all {} data points'.format(bad_sents_count/ len(all_ids)*100,  len(all_ids)))
-
+            # vals = {}
+            vals = prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, token_pos, token_ner, token_dep, token_const)
             perform_tsne(args, vals)
 
             logger.info('saving tpr_attentions to {} '.format(output_attention_file))

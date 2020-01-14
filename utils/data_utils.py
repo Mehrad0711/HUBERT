@@ -1,12 +1,7 @@
-import csv
-import json
 import logging
-import os
-from collections import defaultdict
 import nltk
 from nltk.tag.stanford import StanfordPOSTagger, StanfordNERTagger
 from nltk.parse.stanford import StanfordDependencyParser
-import re
 from arguments import define_args
 import benepar
 
@@ -25,21 +20,56 @@ dep_parser = StanfordDependencyParser(args.dep_parser_model, args.dep_parser_jar
 const_parser = benepar.Parser("benepar_en2")
 
 
-def get_constituency_path_to_root(tree: nltk.Tree, leaf_index: int):
+def get_constituency_path_to_root(tree, leaf_index):
 
     parented_tree = nltk.tree.ParentedTree.convert(tree)
-    labels = []
     path_to_leaf = parented_tree.leaf_treeposition(leaf_index)
-    path_to_leaf_POS = path_to_leaf[:-1]
+    path_to_leaf_cut = path_to_leaf[:-1]
 
-    current, is_root = parented_tree[path_to_leaf_POS], False
+    current = parented_tree[path_to_leaf_cut]
 
+    labels = []
     while current is not None:
-
         labels.append(current.label())
         current = current.parent()
 
     return labels[:-1]
+
+def process_dep(tokens):
+    dep_graph = next(dep_parser.parse(tokens))
+    triples = list(dep_graph.triples())
+    word2parent = {}
+    word2rel = {}
+    rels = []
+    parent_rels = []
+
+    for anchor, rel, word in triples:
+        rels.append((word[0], rel))
+        word2rel[word] = rel
+        word2parent[word] = anchor[0]
+
+    for anchor, rel, word in triples:
+        parent = word2parent[word]
+        parent_rels.append((word[0], word2rel.get(parent, None)))
+
+    return rels, parent_rels
+
+
+def _truncate_seq_pair(tokens_a, tokens_b, max_length):
+    """Truncates a sequence pair in place to the maximum length."""
+
+    # This is a simple heuristic which will always truncate the longer sequence
+    # one token at a time. This makes more sense than truncating an equal percent
+    # of tokens from each, since if one sequence is very short then each token
+    # that's truncated likely contains more information than a longer sequence.
+    while True:
+        total_length = len(tokens_a) + len(tokens_b)
+        if total_length <= max_length:
+            break
+        if len(tokens_a) > len(tokens_b):
+            tokens_a.pop()
+        else:
+            tokens_b.pop()
 
 
 class InputExample(object):
@@ -47,7 +77,8 @@ class InputExample(object):
 
     def __init__(self, guid, text_a, text_b=None, label=None,
                  pos_tagged_a=None, pos_tagged_b=None, ner_tagged_a=None, ner_tagged_b=None,
-                 dep_parsed_a=None, dep_parsed_b=None, const_parsed_a=None, const_parsed_b=None):
+                 dep_parsed_a=None, dep_parsed_b=None, dep_parsed_parents_a=None, dep_parsed_parents_b=None,
+                 const_parsed_a=None, const_parsed_b=None):
         """Constructs a InputExample.
 
         Args:
@@ -69,6 +100,8 @@ class InputExample(object):
         self.ner_tagged_b = ner_tagged_b
         self.dep_parsed_a = dep_parsed_a
         self.dep_parsed_b = dep_parsed_b
+        self.dep_parsed_parents_a = dep_parsed_parents_a
+        self.dep_parsed_parents_b = dep_parsed_parents_b
         self.const_parsed_a = const_parsed_a
         self.const_parsed_b = const_parsed_b
 
@@ -110,676 +143,6 @@ class MultiInputFeatures(object):
         self.label_id = label_id
 
 
-class DataProcessor(object):
-    """Base class for data converters for sequence classification data sets."""
-
-    def __init__(self, num_ex):
-        self.num_ex = num_ex
-
-    def get_train_examples(self, data_dir):
-        """Gets a collection of `InputExample`s for the train set."""
-        raise NotImplementedError()
-
-    def get_dev_examples(self, data_dir):
-        """Gets a collection of `InputExample`s for the dev set."""
-        raise NotImplementedError()
-
-    def get_test_examples(self, data_dir):
-        """Gets a collection of `InputExample`s for the dev set."""
-        raise NotImplementedError()
-
-    def get_labels(self):
-        """Gets the list of labels for this data set."""
-        raise NotImplementedError()
-
-    def _read_tsv(self, input_file, quotechar=None):
-        """Reads a tab separated value file."""
-        with open(input_file, "r", encoding='utf-8') as f:
-            reader = csv.reader(f, delimiter="\t", quotechar=quotechar)
-            lines = []
-            for line in reader:
-                lines.append(line)
-                if len(lines) > self.num_ex:
-                    break
-            return lines
-    def _read_json(self, input_file):
-        """Reads a json file."""
-        data = []
-        with open(input_file, "r", encoding="utf8") as f:
-            for row in f:
-                line = json.loads(row)
-                data.append(line)
-                if len(data) > self.num_ex:
-                    break
-            return data
-
-class NLIProcessor(DataProcessor):
-    """Processor for the general NLI data set (GLUE version)."""
-
-    def __init__(self, num_ex):
-        super(NLIProcessor, self).__init__(num_ex)
-        self.data = defaultdict()
-        # self.metadata = defaultdict()
-
-    def get_all_examples(self, data_dir):
-        """See base class."""
-        data_dir = os.path.join(*[data_dir, 'function_words', 'NLI'])
-        for file in os.listdir(data_dir):
-            category = file.rsplit('_', 1)[0][4:]
-            if file.rsplit('.', 1)[0].endswith('metadata'):
-                # self.metadata[category] = self._create_examples(self._read_json(os.path.join(data_dir, file)), 'train')
-                continue
-            else:
-                self.data[category] = self._create_examples(self._read_json(os.path.join(data_dir, file)), 'train')
-
-
-    def get_labels(self):
-        """See base class."""
-        return ["contradiction", "entailment", "neutral"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0: continue
-            guid = "%s-%s" % (set_type, line['pair-id'])
-            text_a = line['context']
-            text_b = line['hypothesis']
-            if set_type == 'test':
-                label = None
-            else:
-                label = line['label']
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-        return examples
-
-
-class ACCProcessor(DataProcessor):
-    """Processor for the ... data set (GLUE version)."""
-
-    def __init__(self, num_ex):
-        super(ACCProcessor, self).__init__(num_ex)
-        self.data = defaultdict()
-        # self.metadata = defaultdict()
-
-    def get_all_examples(self, data_dir):
-        """See base class."""
-        data_dir = os.path.join(*[data_dir, 'function_words', 'ACCEPTABILITY'])
-        for file in os.listdir(data_dir):
-            category = file.rsplit('_', 1)[0][4:]
-            if file.rsplit('.', 1)[0].endswith('metadata'):
-                # self.metadata[category] = self._create_examples(self._read_json(os.path.join(data_dir, file)), 'train')
-                continue
-            else:
-                self.data[category] = self._create_examples(self._read_json(os.path.join(data_dir, file)), 'train')
-        return self.data
-
-    def get_labels(self):
-        """See base class."""
-        return ["unacceptable", "acceptable"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0: continue
-            guid = "%s-%s" % (set_type, line['pair-id'])
-            text_a = line['context']
-            if line['hypothesis'].strip() == '':
-                text_b = None
-            else:
-                text_b = line['hypothesis']
-            if set_type == 'test':
-                label = None
-            else:
-                label = line['label']
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-        return examples
-
-class SNLIProcessor(DataProcessor):
-    """Processor for the SNLI data set (GLUE version)."""
-
-    def __init__(self, num_ex):
-        super(SNLIProcessor, self).__init__(num_ex)
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")),
-            "dev_matched")
-
-    def get_test_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
-
-    def get_labels(self):
-        """See base class."""
-        return ["contradiction", "entailment", "neutral"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0: continue
-            guid = "%s-%s" % (set_type, line[0])
-            text_a = line[7]
-            text_b = line[8]
-            if set_type == 'test':
-                label = line[-1]
-            else:
-                label = line[-1]
-
-            const_parsed_a = line[5]
-            const_parsed_b = line[6]
-
-            pos_tagged_a = re.findall(r'\([^\)\(]*\)', const_parsed_a)
-            pos_tagged_a = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in pos_tagged_a]
-            pos_tagged_b = re.findall(r'\([^\)\(]*\)', const_parsed_b)
-            pos_tagged_b = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in pos_tagged_b]
-
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label,
-                             pos_tagged_a=pos_tagged_a, pos_tagged_b=pos_tagged_b, const_parsed_a=const_parsed_a, const_parsed_b=const_parsed_b))
-        return examples
-
-class HANSProcessor(DataProcessor):
-    """Processor for the HANS data set (GLUE version)."""
-
-    def __init__(self, num_ex):
-        super(HANSProcessor, self).__init__(num_ex)
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "heuristics_evaluation_set.txt")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "heuristics_evaluation_set.txt")), "eval")
-
-    def get_test_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "heuristics_evaluation_set.txt")), "test")
-
-    def get_labels(self):
-        """See base class."""
-        return ["non-entailment", "entailment"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0: continue
-            guid = str(line[7])
-            text_a = line[5]
-            text_b = line[6]
-            if set_type == 'test':
-                label = None
-            else:
-                label = line[0]
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-        return examples
-
-class MNLIProcessor(DataProcessor):
-    """Processor for the MNLI data set (GLUE version)."""
-
-    def __init__(self, num_ex):
-        super(MNLIProcessor, self).__init__(num_ex)
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev_matched.tsv")),
-            "dev_matched")
-
-    def get_test_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "test_matched.tsv")), "test")
-
-    def get_labels(self):
-        """See base class."""
-        return ["contradiction", "entailment", "neutral"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        # get_transitions = lambda parse: ['reduce' if t == ')' else 'shift' for t in parse if t != '(']
-        for (i, line) in enumerate(lines):
-            if i == 0: continue
-            guid = "%s-%s" % (set_type, line[0])
-            text_a = line[8]
-            text_b = line[9]
-            if set_type == 'test':
-                label = None
-            else:
-                label = line[-1]
-
-            const_parsed_a = line[6]
-            const_parsed_b = line[7]
-
-            pos_tagged_a = re.findall(r'\([^\)\(]*\)', const_parsed_a)
-            pos_tagged_a = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in pos_tagged_a]
-            pos_tagged_b = re.findall(r'\([^\)\(]*\)', const_parsed_b)
-            pos_tagged_b = [tuple([item.split()[1][:-1], item.split()[0][1:]]) for item in pos_tagged_b]
-
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label,
-                             pos_tagged_a=pos_tagged_a, pos_tagged_b=pos_tagged_b, const_parsed_a=const_parsed_a, const_parsed_b=const_parsed_b))
-        return examples
-
-
-class MRPCProcessor(DataProcessor):
-    """Processor for the MRPC data set (GLUE version)."""
-
-    def __init__(self, num_ex):
-        super(MRPCProcessor, self).__init__(num_ex)
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        logger.info("LOOKING AT {}".format(os.path.join(data_dir, "train.tsv")))
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
-
-    def get_test_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
-
-    def get_labels(self):
-        """See base class."""
-        return ["0", "1"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0: continue
-            guid = "%s-%s" % (set_type, i)
-            text_a = line[-2]
-            text_b = line[-1]
-            if set_type == 'test':
-                label = None
-            else:
-                label = line[0]
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-        return examples
-
-class QNLIProcessor(DataProcessor):
-    """Processor for the QNLI data set (GLUE version)."""
-
-    def __init__(self, num_ex):
-        super(QNLIProcessor, self).__init__(num_ex)
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
-
-    def get_test_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
-
-    def get_labels(self):
-        """See base class."""
-        return ["not_entailment", "entailment"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0: continue
-            guid = "%s-%s" % (set_type, line[0])
-            text_a = line[1]
-            text_b = line[2]
-            if set_type == 'test':
-                label = None
-            else:
-                label = line[-1]
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-        return examples
-
-
-class QQPProcessor(DataProcessor):
-    """Processor for the QQP data set (GLUE version)."""
-
-    def __init__(self, num_ex):
-        super(QQPProcessor, self).__init__(num_ex)
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")),
-            "dev_matched")
-
-    def get_test_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
-
-    def get_labels(self):
-        """See base class."""
-        return ["0", "1"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0: continue
-            guid = "%s-%s" % (set_type, line[0])
-            if set_type == 'test':
-                text_a = line[-2]
-                text_b = line[-1]
-                label = None
-            else:
-                if len(line) < 6:
-                    continue
-                text_a = line[-3]
-                text_b = line[-2]
-                label = line[-1]
-
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-        return examples
-
-class RTEProcessor(DataProcessor):
-    """Processor for the RTE data set (GLUE version)."""
-
-    def __init__(self, num_ex):
-        super(RTEProcessor, self).__init__(num_ex)
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")),
-            "dev_matched")
-
-    def get_test_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
-
-    def get_labels(self):
-        """See base class."""
-        return ["not_entailment", "entailment"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0: continue
-            guid = "%s-%s" % (set_type, line[0])
-            if set_type == 'test':
-                text_a = line[-2]
-                text_b = line[-1]
-                label = None
-            else:
-                text_a = line[-3]
-                text_b = line[-2]
-                label = line[-1]
-
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-        return examples
-
-class WNLIProcessor(DataProcessor):
-    """Processor for the WNLI data set (GLUE version)."""
-
-    def __init__(self, num_ex):
-        super(WNLIProcessor, self).__init__(num_ex)
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")),
-            "dev_matched")
-
-    def get_test_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
-
-    def get_labels(self):
-        """See base class."""
-        return ["0", "1"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0: continue
-            guid = "%s-%s" % (set_type, line[0])
-            if set_type == 'test':
-                text_a = line[-2]
-                text_b = line[-1]
-                label = None
-            else:
-                text_a = line[-3]
-                text_b = line[-2]
-                label = line[-1]
-
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-        return examples
-
-
-class SSTProcessor(DataProcessor):
-    """Processor for the SST data set (GLUE version)."""
-
-    def __init__(self, num_ex):
-        super(SSTProcessor, self).__init__(num_ex)
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
-
-    def get_test_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
-
-    def get_labels(self):
-        """See base class."""
-        return ["0", "1"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0: continue
-            if set_type == 'test':
-                guid = "%s-%s" % (set_type, i)
-                text_a = line[1]
-                label = None
-                examples.append(
-                    InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
-            else:
-                guid = "%s-%s" % (set_type, i)
-                text_a = line[0]
-                label = line[-1]
-                examples.append(
-                    InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
-        return examples
-
-
-class STSProcessor(DataProcessor):
-    """Processor for the STS data set (GLUE version)."""
-
-    def __init__(self, num_ex):
-        super(STSProcessor, self).__init__(num_ex)
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")),
-            "dev_matched")
-
-    def get_test_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
-
-    def get_labels(self):
-        """See base class."""
-        print('Any number between 0 and 5')
-        raise NotImplementedError()
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0: continue
-            guid = "%s-%s" % (set_type, line[0])
-            if set_type == 'test':
-                text_a = line[-2]
-                text_b = line[-1]
-                label = None
-            else:
-                text_a = line[-3]
-                text_b = line[-2]
-                label = line[-1]
-
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-        return examples
-
-class COLAProcessor(DataProcessor):
-    """Processor for the CoLA data set (GLUE version)."""
-
-    def __init__(self, num_ex):
-        super(COLAProcessor, self).__init__(num_ex)
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
-
-    def get_test_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
-
-    def get_labels(self):
-        """See base class."""
-        return ["0", "1"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            if i == 0: continue
-            if set_type == 'test':
-                guid = "%s-%s" % (set_type, i)
-                text_a = line[-1]
-                label = None
-                examples.append(
-                    InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
-            else:
-                guid = "%s-%s" % (set_type, i)
-                text_a = line[-1]
-                label = line[1]
-                examples.append(
-                    InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
-        return examples
-
-
-class COPAProcessor(DataProcessor):
-    """Processor for the COPA data set (SuperGLUE version)."""
-
-    def __init__(self, num_ex):
-        super(COPAProcessor, self).__init__(num_ex)
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        logger.info("LOOKING AT {}".format(os.path.join(data_dir, "train.jsonl")))
-        return self._create_examples(
-            self._read_json(os.path.join(data_dir, "train.jsonl")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_json(os.path.join(data_dir, "val.jsonl")), "dev")
-
-    def get_test_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_json(os.path.join(data_dir, "test.jsonl")), "test")
-
-    def get_labels(self):
-        """See base class."""
-        return ["0", "1"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            guid = "%s-%s" % (set_type, i)
-            examples.append(
-                MultiInputExample(guid=guid, premise=line['premise'], choices=['{} || {}'.format(line['question'], line['choice1']),
-                                                                               '{} || {}'.format(line['question'], line['choice2'])],
-                                  question=line['question'], label=str(line['label'])))
-        return examples
-
-
 def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer, single_sentence=False,
                                  return_pos_tags=False, return_ner_tags=False, return_dep_parse=False, return_const_parse=False):
     """Loads a data file into a list of `InputBatch`s."""
@@ -789,6 +152,10 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         label_map = {label: i for i, label in enumerate(label_list)}
 
     features = []
+    token_pos = []
+    token_ner = []
+    token_dep = []
+    token_const = []
 
     for (ex_index, example) in enumerate(examples):
 
@@ -877,12 +244,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             else:
                 label_id = None
 
-        # extract structure information
-        token_pos = []
-        token_ner = []
-        token_dep = []
-        token_const = []
-
+        ### extract structure information
         if return_pos_tags and not example.pos_tagged_a:
             example.pos_tagged_a = pos_tagger.tag(tokens_a)
             if tokens_b:
@@ -893,13 +255,26 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             if tokens_b:
                 example.ner_tagged_b = ner_tagger.tag(nltk.word_tokenize(example.text_b))
         if return_dep_parse and not example.dep_parsed_a:
-            example.dep_parsed_a = dep_parser.parse(tokens_a)
+            example.dep_parsed_a, example.dep_parsed_parents_a = process_dep(tokens_a)
             if tokens_b:
-                example.dep_parsed_b = dep_parser.parse(tokens_b)
+                example.dep_parsed_b, example.dep_parsed_parents_b = process_dep(tokens_b)
         if return_const_parse and not example.const_parsed_a:
             example.const_parsed_a = const_parser.parse(tokens_a)
             if tokens_b:
                 example.const_parsed_b = const_parser.parse(tokens_b)
+        const_parsed_a = []
+        leaves_a = example.const_parsed_a.leaves()
+        for i in range(len(leaves_a)):
+            const_parsed_a.append((leaves_a[i], get_constituency_path_to_root(example.const_parsed_a, i)))
+        if example.const_parsed_b:
+            const_parsed_b = []
+            leaves_b = example.const_parsed_b.leaves()
+            for i in range(len(leaves_b)):
+                const_parsed_b.append((leaves_b[i], get_constituency_path_to_root(example.const_parsed_b, i)))
+        example.const_parsed_a = const_parsed_a
+        if const_parsed_b:
+            example.const_parsed_b = const_parsed_b
+
 
         if example.pos_tagged_a:
             if example.pos_tagged_b and not single_sentence:
@@ -1030,18 +405,3 @@ def convert_multi_examples_to_features(examples, label_list, max_seq_length, tok
     return features
 
 
-def _truncate_seq_pair(tokens_a, tokens_b, max_length):
-    """Truncates a sequence pair in place to the maximum length."""
-
-    # This is a simple heuristic which will always truncate the longer sequence
-    # one token at a time. This makes more sense than truncating an equal percent
-    # of tokens from each, since if one sequence is very short then each token
-    # that's truncated likely contains more information than a longer sequence.
-    while True:
-        total_length = len(tokens_a) + len(tokens_b)
-        if total_length <= max_length:
-            break
-        if len(tokens_a) > len(tokens_b):
-            tokens_a.pop()
-        else:
-            tokens_b.pop()

@@ -82,7 +82,7 @@ def perform_tsne(args, vals):
             tag2main[val] = k
 
     for id, val in data:
-         pos, aFs, aRs = val['pos_tags'], val['all_aFs'], val['all_aRs']
+        pos, aFs, aRs = val['pos_tags'], val['all_aFs'], val['all_aRs']
         labels.extend([tag2main[tag] for tag in pos])
         F_embeddings.extend(aFs)
         R_embeddings.extend(aRs)
