@@ -227,9 +227,9 @@ def prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, toke
         pos_tags = [[subval[1] for subval in val[index]] for val in token_pos]
         ner_tags = [[subval[1] for subval in val[index]] for val in token_ner]
         dep_parse_tokens = [[subval[0] for subval in val[index]] for val in token_dep]
-        dep_parses = [[subval[1] for subval in val[index]] for val in token_dep]
-        const_parses = [[subval[1] for subval in val[index]] for val in token_const]
-        parse_tree_depths = [[len(subval[1]) for subval in val[index]] for val in token_const]
+        dep_parse = [[subval[1] for subval in val[index]] for val in token_dep]
+        const_parse = [[subval[1] for subval in val[index]] for val in token_const]
+        parse_tree_depth = [[len(subval[1]) for subval in val[index]] for val in token_const]
 
     else:
         tokens = []
@@ -287,7 +287,7 @@ def prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, toke
                 val_i.update({'dep_parse_tokens': dep_parse_tokens[i],'dep_edge': dep_parse[i]})
             if args.return_CONST:
                 assert len(const_parse[i]) == len(tokens[i])
-                val_i.update({'cont_parse_path': const_parse[i]})
+                val_i.update({'const_parse_path': const_parse[i]})
                 assert len(parse_tree_depth[i]) == len(tokens[i])
                 val_i.update({'tree_depth': parse_tree_depth[i]})
 

@@ -1,21 +1,3 @@
-from utils.read_data import *
-
-PROCESSORS = {
-    'dnc_acc': ACCProcessor,
-    'dnc_nli': NLIProcessor,
-    'hans': HANSProcessor,
-    'mnli': MNLIProcessor,
-    'snli': SNLIProcessor,
-    'qqp': QQPProcessor,
-    'qnli': QNLIProcessor,
-    'wnli': WNLIProcessor,
-    'rte': RTEProcessor,
-    'mrpc': MRPCProcessor,
-    'sst': SSTProcessor,
-    'sts': STSProcessor,
-    'cola': COLAProcessor,
-    'copa': COPAProcessor
-}
 
 NUM_LABELS_TASK = {
     'dnc_acc': 2,

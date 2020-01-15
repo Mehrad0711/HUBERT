@@ -16,13 +16,14 @@ trained_models
 hubert-tests*
 run.sh
 yamls
-predictions/
 scripts/
-workdir/
+extras/
+predictions/
 pytorch_model_*
 workdir/
 *plot*
 *.png
+stanford-parser-3.9.2-models.jar
 
 # Distribution / packaging
 .Python

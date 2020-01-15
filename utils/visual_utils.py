@@ -5,8 +5,8 @@ from sklearn import cluster
 import logging
 
 from matplotlib import pyplot as plt
-from pml.unsupervised import clustering
-from pml.data.model import DataSet
+from collections import Counter
+from utils.global_vars import POS_TAGS_MAP
 
 from MulticoreTSNE import MulticoreTSNE as tsne
 
@@ -18,6 +18,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s
                     datefmt='%m/%d/%Y %H:%M:%S',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def get_attention(args, aFs, aRs, orig_to_token_maps):
 
@@ -64,11 +65,27 @@ def get_attention(args, aFs, aRs, orig_to_token_maps):
 
     return F_list, R_list
 
+def calculate_purity(cluster_assignments, labels):
+
+    clusters = set(list(cluster_assignments))
+
+    # find out what class is most frequent in each cluster
+    cluster_classes = {}
+    for cluster in clusters:
+        cluster_labels = labels[cluster_assignments == cluster]
+        cluster_classes[cluster] = str(Counter(cluster_labels).most_common(1)[0][0])
+
+    # Return the percentage of indices in agreement.
+    num_agreed = 0
+    for i in range(len(labels)):
+        if cluster_classes[cluster_assignments[i]] == labels[i]:
+            num_agreed += 1
+
+    return float(num_agreed) / len(labels)
+
 
 def perform_tsne(args, vals):
-    from utils.global_vars import POS_TAGS_MAP
 
-    # data = random.sample(vals.items(), k=min(1000, len(vals.items())))
     data = vals.items()
 
     F_embeddings, R_embeddings, labels = [], [], []
@@ -116,13 +133,13 @@ def perform_tsne(args, vals):
         plt.savefig('./tsne_{}.png'.format(mode))
         plt.show()
 
-
-        # n_clusters = 5
-        # kmeans = cluster.KMeans(n_clusters = n_clusters)
-        # kmeans.fit(R_proj)
-        # labels = kmeans.labels_
-
-        dataset = DataSet(data, list(labels))
-        cluster_res = clustering.kmeans(dataset, k=args.n_clusters)
-        purity = cluster_res.calculate_purity()
+        kmeans = cluster.KMeans(n_clusters = args.n_clusters)
+        kmeans.fit(data)
+        cluster_assignments = kmeans.labels_
+        purity = calculate_purity(np.array(cluster_assignments), labels)
         logger.info('clustering purity for {} vectors is {}'.format(mode, purity))
+
+        # dataset = DataSet(data, list(labels))
+        # cluster_res = clustering.kmeans(dataset, k=args.n_clusters)
+        # purity = cluster_res.calculate_purity()
+

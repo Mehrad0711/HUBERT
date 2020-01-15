@@ -35,15 +35,16 @@ from transformers.configuration_bert import PretrainedConfig
 
 from tqdm import tqdm, trange
 
-from utils.visualization import perform_tsne
+from utils.visual_utils import perform_tsne
 
 from arguments import define_args
-from utils.global_vars import PROCESSORS, NUM_LABELS_TASK, TASK_TYPE
+from utils.global_vars import NUM_LABELS_TASK, TASK_TYPE
 from modules.model import BertForSequenceClassification_tpr
 from utils.evaluation import evaluate
 from utils.prediction import predict
 from utils.prepare import prepare_data_loader, prepare_model, prepare_optim, prepare_structure_values
 from utils.model_utils import modify_model, decay
+from utils.read_data import PROCESSORS
 
 import warnings
 warnings.simplefilter("ignore", UserWarning)

@@ -2,7 +2,7 @@ import torch
 from tqdm import tqdm
 import logging
 from utils.metrics import class_acc, reg_acc
-from utils.visualization import get_attention
+from utils.visual_utils import get_attention
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',

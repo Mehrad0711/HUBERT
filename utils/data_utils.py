@@ -267,19 +267,6 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             example.const_parsed_a = const_parser.parse(tokens_a)
             if tokens_b:
                 example.const_parsed_b = const_parser.parse(tokens_b)
-        const_parsed_a = []
-        leaves_a = example.const_parsed_a.leaves()
-        for i in range(len(leaves_a)):
-            const_parsed_a.append((leaves_a[i], get_constituency_path_to_root(example.const_parsed_a, i)))
-        if example.const_parsed_b:
-            const_parsed_b = []
-            leaves_b = example.const_parsed_b.leaves()
-            for i in range(len(leaves_b)):
-                const_parsed_b.append((leaves_b[i], get_constituency_path_to_root(example.const_parsed_b, i)))
-        example.const_parsed_a = const_parsed_a
-        if const_parsed_b:
-            example.const_parsed_b = const_parsed_b
-
 
         if return_const_parse:
             const_parsed_a = []

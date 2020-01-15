@@ -676,3 +676,21 @@ class COPAProcessor(DataProcessor):
                                                                                '{} || {}'.format(line['question'], line['choice2'])],
                                   question=line['question'], label=str(line['label'])))
         return examples
+
+
+PROCESSORS = {
+    'dnc_acc': ACCProcessor,
+    'dnc_nli': NLIProcessor,
+    'hans': HANSProcessor,
+    'mnli': MNLIProcessor,
+    'snli': SNLIProcessor,
+    'qqp': QQPProcessor,
+    'qnli': QNLIProcessor,
+    'wnli': WNLIProcessor,
+    'rte': RTEProcessor,
+    'mrpc': MRPCProcessor,
+    'sst': SSTProcessor,
+    'sts': STSProcessor,
+    'cola': COLAProcessor,
+    'copa': COPAProcessor
+}
