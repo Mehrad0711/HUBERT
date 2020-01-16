@@ -331,7 +331,6 @@ def main(args, logger):
 
         if args.save_tpr_attentions:
             output_attention_file = os.path.join(*[args.output_dir, eval_task_name, "tpr_attention.txt"])
-            # vals = {}
             vals = prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, token_pos, token_ner, token_dep, token_const)
             perform_tsne(args, vals)
 

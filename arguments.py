@@ -417,22 +417,22 @@ def define_args():
                         default=False,
                         help='return constituency parse paths for tokens in the input data')
     parser.add_argument("--pos_tagger_jar",
-                        default='./scripts/stanford-postagger-3.9.2.jar',
+                        default='./tests/parser_files/stanford-postagger-3.9.2.jar',
                         help='path to stanford jar file for Stanford POS tagger')
     parser.add_argument("--pos_tagger_model",
-                        default='./scripts/english-bidirectional-distsim.tagger',
+                        default='./tests/parser_files/english-bidirectional-distsim.tagger',
                         help='path to stanford model file for Stanford POS tagger')
     parser.add_argument("--ner_tagger_jar",
-                        default='./scripts/stanford-ner-3.9.2.jar',
+                        default='./tests/parser_files/stanford-ner-3.9.2.jar',
                         help='path to stanford jar file for Stanford POS tagger')
     parser.add_argument("--ner_tagger_model",
-                        default='./scripts/english.muc.7class.distsim.crf.ser.gz',
+                        default='./tests/parser_files/english.muc.7class.distsim.crf.ser.gz',
                         help='path to stanford model file for Stanford POS tagger')
     parser.add_argument("--dep_parser_jar",
-                        default='./scripts/stanford-parser.jar',
+                        default='./tests/parser_files/stanford-parser.jar',
                         help='path to stanford jar file for Stanford POS tagger')
     parser.add_argument("--dep_parser_model",
-                        default='./scripts/stanford-parser-3.9.2-models.jar',
+                        default='./tests/parser_files/stanford-parser-3.9.2-models.jar',
                         help='path to stanford model file for Stanford POS tagger')
 
     ####################

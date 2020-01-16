@@ -254,6 +254,10 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             example.pos_tagged_a = pos_tagger.tag(tokens_a)
             if tokens_b:
                 example.pos_tagged_b = pos_tagger.tag(tokens_b)
+        ## remove pos_tags for MNLI and SNLI if return_pos_tags is False
+        if not return_pos_tags:
+            example.pos_tagged_a = None
+            example.pos_tagged_b = None
         if return_ner_tags:
             # for NER tokenize without lower casing the words
             example.ner_tagged_a = ner_tagger.tag(nltk.word_tokenize(example.text_a))
@@ -267,6 +271,10 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             example.const_parsed_a = const_parser.parse(tokens_a)
             if tokens_b:
                 example.const_parsed_b = const_parser.parse(tokens_b)
+        ## remove const_parse for MNLI and SNLI if return_const_parse is False
+        if not return_const_parse:
+            example.const_parsed_a = None
+            example.const_parsed_b = None
 
         if return_const_parse:
             const_parsed_a = []
@@ -297,7 +305,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             if example.dep_parsed_b and not single_sentence:
                 token_dep.append((example.dep_parsed_a, example.dep_parsed_b))
             else:
-                token_dep.append((example.dep_parsed_q,))
+                token_dep.append((example.dep_parsed_a,))
         if example.const_parsed_a:
             if example.const_parsed_b and not single_sentence:
                 token_const.append((example.const_parsed_a, example.const_parsed_b))
