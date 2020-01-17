@@ -4,6 +4,7 @@ from nltk.tag.stanford import StanfordPOSTagger, StanfordNERTagger
 from nltk.parse.stanford import StanfordDependencyParser
 from arguments import define_args
 import benepar
+from tqdm import tqdm
 
 nltk.download('punkt')
 benepar.download('benepar_en2')
@@ -157,12 +158,13 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         label_map = {label: i for i, label in enumerate(label_list)}
 
     features = []
+    all_tokens = []
     token_pos = []
     token_ner = []
     token_dep = []
     token_const = []
 
-    for (ex_index, example) in enumerate(examples):
+    for ex_index, example in enumerate(tqdm(examples)):
 
         do_lower = tokenizer.basic_tokenizer.do_lower_case
         tokens_b = None
@@ -290,6 +292,10 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             if const_parsed_b:
                 example.const_parsed_b = const_parsed_b
 
+        if tokens_b and not single_sentence:
+            all_tokens.append((tokens_a, tokens_b))
+        else:
+            all_tokens.append((tokens_a, ))
 
         if example.pos_tagged_a:
             if example.pos_tagged_b and not single_sentence:
@@ -329,7 +335,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
 
         features.append(InputFeatures(guid, input_ids, input_mask, segment_ids, sub_word_masks, orig_to_tok_map, label_id))
 
-    structure_features = (token_pos, token_ner, token_dep, token_const)
+    structure_features = (all_tokens, token_pos, token_ner, token_dep, token_const)
     return features, structure_features
 
 
@@ -341,7 +347,7 @@ def convert_multi_examples_to_features(examples, label_list, max_seq_length, tok
         label_map = {label: i for i, label in enumerate(label_list)}
 
     features = []
-    for (ex_index, example) in enumerate(examples):
+    for ex_index, example in enumerate(tqdm(examples)):
         premise = tokenizer.tokenize(example.premise)
 
         size = len(example.choices)

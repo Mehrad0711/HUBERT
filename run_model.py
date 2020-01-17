@@ -28,14 +28,11 @@ import json
 
 import numpy as np
 import torch
+from tqdm import tqdm, trange
 
 from transformers.tokenization_bert import BertTokenizer
 from tensorboardX import SummaryWriter
 from transformers.configuration_bert import PretrainedConfig
-
-from tqdm import tqdm, trange
-
-from utils.visual_utils import perform_tsne
 
 from arguments import define_args
 from utils.global_vars import NUM_LABELS_TASK, TASK_TYPE
@@ -45,6 +42,7 @@ from utils.prediction import predict
 from utils.prepare import prepare_data_loader, prepare_model, prepare_optim, prepare_structure_values
 from utils.model_utils import modify_model, decay
 from utils.read_data import PROCESSORS
+from utils.visual_utils import perform_tsne
 
 import warnings
 warnings.simplefilter("ignore", UserWarning)
@@ -116,8 +114,6 @@ def main(args, logger):
             last_update = 0
 
             train_dataloader = prepare_data_loader(args, processor, label_list, task_type, task, tokenizer, split='train')[0]
-
-
 
             for epoch in trange(int(args.num_train_epochs), desc="Epoch"):
                 model.train()
@@ -261,11 +257,6 @@ def main(args, logger):
         eval_task_name = all_tasks[-1]
         logger.info('*** Start evaluating for {} ***'.format(eval_task_name))
 
-        return_pos_tags = args.return_POS
-        return_ner_tags = args.return_NER
-        return_dep_parse = args.return_DEP
-        return_const_parse = args.return_CONST
-
         processor = PROCESSORS[eval_task_name.lower()](args.num_ex)
         num_labels = NUM_LABELS_TASK[eval_task_name.lower()]
         task_type = TASK_TYPE[eval_task_name.lower()]
@@ -282,11 +273,16 @@ def main(args, logger):
         #prepare data
         split = args.data_split_attention if args.save_tpr_attentions else 'dev'
 
+        return_mapping = {'pos': args.return_POS, 'ner': args.return_NER,
+                          'dep': args.return_DEP, 'const': args.return_CONST}
+
         eval_dataloader, all_guids, structure_features = \
                             prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer,
-                                single_sentence=args.single_sentence, split=split, return_pos_tags=args.return_POS,
-                                return_ner_tags=args.return_NER, return_dep_parse=args.return_DEP, return_const_parse=args.return_CONST)
-        token_pos, token_ner, token_dep, token_const = structure_features
+                                single_sentence=args.single_sentence, split=split, return_pos_tags=return_mapping['pos'],
+                                return_ner_tags=return_mapping['ner'], return_dep_parse=return_mapping['dep'],
+                                return_const_parse=return_mapping['const'])
+
+        all_tokens, token_pos, token_ner, token_dep, token_const = structure_features
 
         states = torch.load(output_model_file, map_location=device)
         model_state_dict = states['state_dict']
@@ -329,10 +325,18 @@ def main(args, logger):
         if not os.path.exists(os.path.join(args.output_dir, eval_task_name)):
             os.makedirs(os.path.join(args.output_dir, eval_task_name))
 
+        if (not args.save_tpr_attentions) and (args.do_tsne or args.do_Kmeans):
+            logger.warning('T-SNE and K-means will not be performed since attentions are not saved')
+            logger.warning('Turn on save_tpr_attentions argument to save attentions')
+
         if args.save_tpr_attentions:
             output_attention_file = os.path.join(*[args.output_dir, eval_task_name, "tpr_attention.txt"])
-            vals = prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, token_pos, token_ner, token_dep, token_const)
-            perform_tsne(args, vals)
+            vals = prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, all_tokens, token_pos, token_ner, token_dep, token_const)
+            if args.do_tsne:
+                if return_mapping[args.tsne_label]:
+                    perform_tsne(args, vals, args.tsne_label)
+                else:
+                    logger.warning('T-SNE can not be performed with tsne_label: "{}" since values for that role is not saved'.format(args.tsne_label))
 
             logger.info('saving tpr_attentions to {} '.format(output_attention_file))
             with open(output_attention_file, "w") as fp:

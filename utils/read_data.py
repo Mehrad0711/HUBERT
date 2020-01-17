@@ -257,7 +257,6 @@ class MNLIProcessor(DataProcessor):
     def _create_examples(self, lines, set_type):
         """Creates examples for the training and dev sets."""
         examples = []
-        # get_transitions = lambda parse: ['reduce' if t == ')' else 'shift' for t in parse if t != '(']
         for (i, line) in enumerate(lines):
             if i == 0: continue
             guid = "%s-%s" % (set_type, line[0])

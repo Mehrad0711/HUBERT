@@ -30,7 +30,7 @@ def prepare_data_loader(args, processor, label_list, task_type, task, tokenizer,
 
     features, structure_features = convert_examples_to_features(examples, label_list, args.max_seq_length, tokenizer, single_sentence,
                                                                   return_pos_tags, return_ner_tags, return_dep_parse, return_const_parse)
-    token_pos, token_ner, token_dep, token_const = structure_features
+    all_tokens, token_pos, token_ner, token_dep, token_const = structure_features
 
     logger.info("***** preparing data *****")
     logger.info("  Num examples = %d", len(examples))
@@ -218,12 +218,13 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
     return model, bert_config
 
 
-def prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, token_pos, token_ner, token_dep, token_const):
+def prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, all_tokens, token_pos, token_ner, token_dep, token_const):
 
     values = {}
     if args.single_sentence or eval_task_name.lower() in ['sst', 'cola']:
         index = 0
-        tokens = [[subval[0].lower() for subval in val[index]] for val in token_pos]
+        tokens = [val[index] for val in all_tokens]
+        # tokens = [[subval[0].lower() for subval in val[index]] for val in token_pos]
         pos_tags = [[subval[1] for subval in val[index]] for val in token_pos]
         ner_tags = [[subval[1] for subval in val[index]] for val in token_ner]
         dep_parse_tokens = [[subval[0] for subval in val[index]] for val in token_dep]
@@ -240,7 +241,7 @@ def prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, toke
         const_parse = []
         parse_tree_depth = []
         index = 0
-        tokens_a = [[subval[0].lower() for subval in val[index]] for val in token_pos]
+        tokens_a = [val[index] for val in all_tokens]
         pos_tags_a = [[subval[1] for subval in val[index]] for val in token_pos]
         ner_tags_a = [[subval[1] for subval in val[index]] for val in token_ner]
         dep_parse_tokens_a = [[subval[0] for subval in val[index]] for val in token_dep]
@@ -248,7 +249,7 @@ def prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, toke
         const_parses_a = [[subval[1] for subval in val[index]] for val in token_const]
         parse_tree_depths_a = [[len(subval[1]) for subval in val[index]] for val in token_const]
         index = 1
-        tokens_b = [[subval[0].lower() for subval in val[index]] for val in token_pos]
+        tokens_b = [val[index] for val in all_tokens]
         pos_tags_b = [[subval[1] for subval in val[index]] for val in token_pos]
         ner_tags_b = [[subval[1] for subval in val[index]] for val in token_ner]
         dep_parse_tokens_b = [[subval[0] for subval in val[index]] for val in token_dep]

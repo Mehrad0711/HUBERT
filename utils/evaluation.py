@@ -44,8 +44,7 @@ def evaluate(args, model, eval_dataloader, device, task_type, global_step=None, 
 
         nb_eval_examples += input_ids.size(0)
         nb_eval_steps += 1
-
-    all_ids = [data_split + '_' + str(i) for i in range(aFs.size(0))]
+    all_ids = [data_split + '_' + str(i) for i in range(logits.shape[0])]
 
     eval_loss = eval_loss / nb_eval_steps
     eval_accuracy = eval_accuracy / nb_eval_examples

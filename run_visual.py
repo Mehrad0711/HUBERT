@@ -38,13 +38,18 @@ def run(args, tag_type, target_tag):
         tag2idx = defaultdict(int)
 
     for id, line in lines.items():
+        flag = False
         try:
             tags = line[tag_type]
         except:
             logger.error('Specified file does not contain {} information'.format(tag_type))
             logger.error('Skipping this tag and continuing the process...')
             break
-        all_aRs = line['all_aRs']
+        if args.role_type == 'structure':
+            all_roles = line['all_aRs']
+        else:
+            all_roles = line['all_aFs']
+
         if tag_type == 'dep_edge':
             dep_tokens = line['dep_parse_tokens']
             orig_tokens = line['tokens']
@@ -52,14 +57,21 @@ def run(args, tag_type, target_tag):
             # find mapping between dep and orig tokens
             indices = []
             for tok in dep_tokens:
-                indices.append(orig_tokens.index(tok))
-            all_aRs = [all_aRs[i] for i in indices]
+                try:
+                    indices.append(orig_tokens.index(tok))
+                except:
+                    logger.error('Failing to find token: {} in sentence: {}'.format(tok, orig_tokens))
+                    flag = True
+                    break
+            if flag:
+                continue
+            all_roles = [all_roles[i] for i in indices]
             tokens = dep_tokens
         else:
             tokens = line['tokens']
 
-        assert len(tags) == len(all_aRs) == len(tokens)
-        for tag, role, token in zip(tags, all_aRs, tokens):
+        assert len(tags) == len(all_roles) == len(tokens)
+        for tag, role, token in zip(tags, all_roles, tokens):
             if tag == target_tag:
                 role2token_targeted[str(role)].append(token)
             if tag == '[SEP]':
@@ -188,7 +200,7 @@ if __name__ == '__main__':
     parser.add_argument('--input_file', default='./results/MNLI/tpr_attention.txt', type=str)
     parser.add_argument('--output_plot_file', default='./plot.png', type=str)
     parser.add_argument('--tag_type', default='pos_tags', choices=['all', 'pos_tags', 'ner_tags', 'dep_edge', 'const_parse_path', 'tree_depth'], type=str)
-    parser.add_argument()
+    parser.add_argument('--role_type', default='structure', choices=['structure', 'semantic'], type=str)
     parser.add_argument('--merge_tags', default=False, type=str2bool, help='merge similar tags')
     parser.add_argument('--prune', default=False, type=str2bool, help='prune low frequency values')
     parser.add_argument('--threshold', default=0.0, type=float, help='cutoff value for pruning')

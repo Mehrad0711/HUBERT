@@ -84,23 +84,24 @@ def calculate_purity(cluster_assignments, labels):
     return float(num_agreed) / len(labels)
 
 
-def perform_tsne(args, vals):
+def perform_tsne(args, vals, tsne_label):
+
+    label_mapping = {'pos': 'pos_tags', 'ner': 'ner_tags', 'dep': 'dep_edge',
+                     'tree': 'tree_depth', 'const': 'const_parse_path'}
 
     data = vals.items()
-
     F_embeddings, R_embeddings, labels = [], [], []
 
-    main_tags = POS_TAGS_MAP.keys()
-    main_tag2idx = {k: i for i, k in enumerate(main_tags)}
-
     tag2main = {}
-    for k, v in POS_TAGS_MAP.items():
-        for val in v:
-            tag2main[val] = k
+    if tsne_label == 'pos':
+        for k, v in POS_TAGS_MAP.items():
+            for val in v:
+                tag2main[val] = k
 
     for id, val in data:
-        pos, aFs, aRs = val['pos_tags'], val['all_aFs'], val['all_aRs']
-        labels.extend([tag2main[tag] for tag in pos])
+        role, aFs, aRs = val[label_mapping[tsne_label]], val['all_aFs'], val['all_aRs']
+        # return main tag for pos label. Otherwise return the tag itself.
+        labels.extend([tag2main.get(tag, tag) for tag in role])
         F_embeddings.extend(aFs)
         R_embeddings.extend(aRs)
 
@@ -112,17 +113,17 @@ def perform_tsne(args, vals):
         R_embeddings = R_embeddings / np.linalg.norm(R_embeddings, axis=1, keepdims=True)
         F_embeddings = F_embeddings / np.linalg.norm(F_embeddings, axis=1, keepdims=True)
 
-    R_proj = tsne(n_jobs=args.n_jobs, n_components=args.n_components, random_state=0, metric=args.metric, verbose=True, n_iter=args.n_iter).fit_transform(R_embeddings)
-    F_proj = tsne(n_jobs=args.n_jobs, n_components=args.n_components, random_state=0, metric=args.metric, verbose=True, n_iter=args.n_iter).fit_transform(F_embeddings)
+    R_proj = tsne(n_jobs=args.n_jobs, perplexity=args.perplexity, n_components=args.n_components, random_state=0, metric=args.metric, verbose=True, n_iter=args.n_iter).fit_transform(R_embeddings)
+    F_proj = tsne(n_jobs=args.n_jobs, perplexity=args.perplexity, n_components=args.n_components, random_state=0, metric=args.metric, verbose=True, n_iter=args.n_iter).fit_transform(F_embeddings)
 
-    pal = sns.color_palette("colorblind", n_colors=len(main_tags))
+    pal = sns.color_palette("Paired", n_colors=len(set(labels)))
 
     proj = {'role': R_proj, 'filler': F_proj}
     for mode in ('role', 'filler'):
         data = proj[mode]
         fig, ax = plt.subplots()
 
-        for i, label in enumerate(main_tags):
+        for i, label in enumerate(set(labels)):
             vectors = data[labels == label]
             xs, ys = vectors[:, 0], vectors[:, 1]
             ax.scatter(xs, ys, label=label, c=[pal[i]]*len(xs), alpha=0.6)
@@ -133,13 +134,9 @@ def perform_tsne(args, vals):
         plt.savefig('./tsne_{}.png'.format(mode))
         plt.show()
 
-        kmeans = cluster.KMeans(n_clusters = args.n_clusters)
-        kmeans.fit(data)
-        cluster_assignments = kmeans.labels_
-        purity = calculate_purity(np.array(cluster_assignments), labels)
-        logger.info('clustering purity for {} vectors is {}'.format(mode, purity))
-
-        # dataset = DataSet(data, list(labels))
-        # cluster_res = clustering.kmeans(dataset, k=args.n_clusters)
-        # purity = cluster_res.calculate_purity()
-
+        if args.do_Kmeans:
+            kmeans = cluster.KMeans(n_clusters=args.n_clusters)
+            kmeans.fit(data)
+            cluster_assignments = kmeans.labels_
+            purity = calculate_purity(np.array(cluster_assignments), labels)
+            logger.info('clustering purity for {} vectors is {}'.format(mode, purity))

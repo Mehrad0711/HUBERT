@@ -59,12 +59,13 @@ def define_args():
                         type=str,
                         nargs='+',
                         help="Task to test your models on")
-    parser.add_argument("--max_seq_length",
-                        default=128,
-                        type=int,
-                        help="The maximum total input sequence length after WordPiece tokenization. \n"
-                             "Sequences longer than this will be truncated, and sequences shorter \n"
-                             "than this will be padded.")
+
+    parser.add_argument("--delete_ok",
+                        type=str2bool,
+                        default=False,
+                        help='whether to delete the result directory if it already exists')
+
+
     parser.add_argument("--do_train",
                         type=str2bool,
                         default=False,
@@ -81,6 +82,8 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help="Set this flag if you are using an uncased model.")
+
+
     parser.add_argument("--train_batch_size",
                         default=32,
                         type=int,
@@ -89,6 +92,155 @@ def define_args():
                         default=8,
                         type=int,
                         help="Total batch size for eval.")
+
+
+
+
+    ####################
+    ## Model arguments
+    ####################
+
+    ####################
+    ## TPR arguments
+    ####################
+
+    # model
+    parser.add_argument("--nSymbols",
+                        default=50,
+                        type=int,
+                        help="# of symbols")
+    parser.add_argument("--nRoles",
+                        default=35,
+                        type=int,
+                        help="# of roles")
+    parser.add_argument("--dSymbols",
+                        default=32,
+                        type=int,
+                        help="embedding size of symbols")
+    parser.add_argument("--dRoles",
+                        default=32,
+                        type=int,
+                        help="embedding size of roles")
+    parser.add_argument("--temperature",
+                        default=1.0,
+                        type=float,
+                        help="softmax temperature for aF and aR")
+    parser.add_argument("--sub_word_masking",
+                        type=str2bool,
+                        default=False,
+                        help="whether to feed in only the first sub-word to TPRN (as suggested in BERT paper for NER)")
+    parser.add_argument("--bidirect",
+                        type=str2bool,
+                        default=False,
+                        help="whether to use a bidirectional encoder")
+
+
+    parser.add_argument("--encoder",
+                        type=str,
+                        default='tpr_transformers',
+                        choices=['no_enc', 'lstm', 'tpr_lstm', 'tpr_transformers'],
+                        help="which encoder to use")
+
+    # model parameters to load during fine-tuning
+    parser.add_argument("--load_ckpt",
+                        default='',
+                        help="path to checkpoint model to load Symbol and Filler matrices")
+    parser.add_argument("--load_role",
+                        type=str2bool,
+                        default=False,
+                        help="Load Role matrices from checkpoint")
+    parser.add_argument("--load_filler",
+                        type=str2bool,
+                        default=False,
+                        help="Load Filler matrices from checkpoint")
+    parser.add_argument("--load_bert_params",
+                        type=str2bool,
+                        default=False,
+                        help="Load bert parameters from checkpoint")
+    parser.add_argument("--load_role_selector",
+                        type=str2bool,
+                        default=False,
+                        help="Load Role selector neural network from checkpoint")
+    parser.add_argument("--load_filler_selector",
+                        type=str2bool,
+                        default=False,
+                        help="Load Filler selector neural network from checkpoint")
+    parser.add_argument("--load_classifier",
+                        type=str2bool,
+                        default=False,
+                        help="Load classifier parameters from checkpoint")
+    parser.add_argument("--load_LSTM_params",
+                        type=str2bool,
+                        default=False,
+                        help='load LSTM weight and biases')
+
+
+    parser.add_argument("--fixed_Role",
+                        type=str2bool,
+                        default=False,
+                        help='use identity matrix for Role emebddings instead of learning them')
+
+
+    # model parameters to freeze during fine-tuning
+    parser.add_argument("--freeze_role",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role matrices after loading from a trained model')
+    parser.add_argument("--freeze_filler",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Filler matrices after loading from a trained model')
+    parser.add_argument("--freeze_role_selector",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role networks after loading from a trained model')
+    parser.add_argument("--freeze_filler_selector",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Filler networks after loading from a trained model')
+    parser.add_argument("--freeze_bert_params",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
+    parser.add_argument("--freeze_classifier",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
+    parser.add_argument("--freeze_LSTM_params",
+                        type=str2bool,
+                        default=False,
+                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
+
+    # BERT model params
+    parser.add_argument("--num_bert_layers",
+                        type=int,
+                        default=12,
+                        help='num_bert_layers to use in our model')
+    parser.add_argument("--num_rnn_layers",
+                        type=int,
+                        default=1,
+                        help='number of layers for recurrent network')
+    parser.add_argument("--num_extra_layers",
+                        type=int,
+                        default=0,
+                        help='number of extra transformer layers for tpr_transformer network')
+    parser.add_argument("--num_heads",
+                        type=int,
+                        default=8,
+                        help='number of head for transformer tpr network')
+
+    ####################
+    ## optimizer arguments
+    ####################
+    parser.add_argument("--optimizer",
+                        type=str,
+                        default='adam',
+                        choices=['adam', 'radam', 'sgd'],
+                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
+
+    ####################
+    ## training arguments
+    ####################
     parser.add_argument("--log_every",
                         default=100,
                         type=int,
@@ -144,137 +296,7 @@ def define_args():
                              "0 (default value): dynamic loss scaling.\n"
                              "Positive power of 2: static loss scaling value.\n")
 
-    ####################
-    ## Model arguments
-    ####################
 
-    ####################
-    ## TPR arguments
-    ####################
-
-    # model
-    parser.add_argument("--nSymbols",
-                        default=50,
-                        type=int,
-                        help="# of symbols")
-    parser.add_argument("--nRoles",
-                        default=35,
-                        type=int,
-                        help="# of roles")
-    parser.add_argument("--dSymbols",
-                        default=32,
-                        type=int,
-                        help="embedding size of symbols")
-    parser.add_argument("--dRoles",
-                        default=32,
-                        type=int,
-                        help="embedding size of roles")
-    parser.add_argument("--temperature",
-                        default=1.0,
-                        type=float,
-                        help="softmax temperature for aF and aR")
-
-
-
-    parser.add_argument("--sub_word_masking",
-                        type=str2bool,
-                        default=False,
-                        help="whether to feed in only the first sub-word to TPRN (as suggested in BERT paper for NER)")
-    parser.add_argument("--bidirect",
-                        type=str2bool,
-                        default=False,
-                        help="whether to use a bidirectional encoder")
-    parser.add_argument("--encoder",
-                        type=str,
-                        default='tpr_transformers',
-                        choices=['no_enc', 'lstm', 'tpr_lstm', 'tpr_transformers'],
-                        help="which encoder to use")
-
-    # model parameters to load during fine-tuning
-    parser.add_argument("--load_ckpt",
-                        default='',
-                        help="path to checkpoint model to load Symbol and Filler matrices")
-    parser.add_argument("--load_role",
-                        type=str2bool,
-                        default=False,
-                        help="Load Role matrices from checkpoint")
-    parser.add_argument("--load_filler",
-                        type=str2bool,
-                        default=False,
-                        help="Load Filler matrices from checkpoint")
-    parser.add_argument("--load_bert_params",
-                        type=str2bool,
-                        default=False,
-                        help="Load bert parameters from checkpoint")
-    parser.add_argument("--load_role_selector",
-                        type=str2bool,
-                        default=False,
-                        help="Load Role selector neural network from checkpoint")
-    parser.add_argument("--load_filler_selector",
-                        type=str2bool,
-                        default=False,
-                        help="Load Filler selector neural network from checkpoint")
-    parser.add_argument("--load_classifier",
-                        type=str2bool,
-                        default=False,
-                        help="Load classifier parameters from checkpoint")
-    parser.add_argument("--load_LSTM_params",
-                        type=str2bool,
-                        default=False,
-                        help='load LSTM weight and biases')
-
-
-    parser.add_argument("--fixed_Role",
-                        type=str2bool,
-                        default=False,
-                        help='use identity matrix for Role emebddings instead of learning them')
-    parser.add_argument("--delete_ok",
-                        type=str2bool,
-                        default=False,
-                        help='whether to delete the result directory if it already exists')
-
-    # model parameters to freeze during fine-tuning
-    parser.add_argument("--freeze_role",
-                        type=str2bool,
-                        default=False,
-                        help='whether to freeze Role matrices after loading from a trained model')
-    parser.add_argument("--freeze_filler",
-                        type=str2bool,
-                        default=False,
-                        help='whether to freeze Filler matrices after loading from a trained model')
-    parser.add_argument("--freeze_role_selector",
-                        type=str2bool,
-                        default=False,
-                        help='whether to freeze Role networks after loading from a trained model')
-    parser.add_argument("--freeze_filler_selector",
-                        type=str2bool,
-                        default=False,
-                        help='whether to freeze Filler networks after loading from a trained model')
-    parser.add_argument("--freeze_bert_params",
-                        type=str2bool,
-                        default=False,
-                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
-    parser.add_argument("--freeze_classifier",
-                        type=str2bool,
-                        default=False,
-                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
-    parser.add_argument("--freeze_LSTM_params",
-                        type=str2bool,
-                        default=False,
-                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
-
-
-    parser.add_argument("--optimizer",
-                        type=str,
-                        default='adam',
-                        choices=['adam', 'radam', 'sgd'],
-                        help='whether to freeze Role/ Filler matrices after loading from a trained model')
-
-
-    parser.add_argument("--num_ex",
-                        type=float,
-                        default=2000000000,
-                        help='number of examples to choose of train/dev/test dataset')
     parser.add_argument("--debug",
                         type=str2bool,
                         default=False,
@@ -296,22 +318,6 @@ def define_args():
                         type=str2bool,
                         default=False,
                         help='Freeze bert layers')
-    parser.add_argument("--num_bert_layers",
-                        type=int,
-                        default=12,
-                        help='num_bert_layers to use in our model')
-    parser.add_argument("--num_rnn_layers",
-                        type=int,
-                        default=1,
-                        help='number of layers for recurrent network')
-    parser.add_argument("--num_extra_layers",
-                        type=int,
-                        default=0,
-                        help='number of extra transformer layers for tpr_transformer network')
-    parser.add_argument("--num_heads",
-                        type=int,
-                        default=8,
-                        help='number of head for transformer tpr network')
     parser.add_argument("--do_src_mask",
                         type=str2bool,
                         default=True,
@@ -345,6 +351,23 @@ def define_args():
                         type=str,
                         default='v1',
                         help='which classifier to use')
+
+    ####################
+    ## dataset util parameters
+    ####################
+    parser.add_argument("--max_seq_length",
+                        default=128,
+                        type=int,
+                        help="The maximum total input sequence length after WordPiece tokenization. \n"
+                             "Sequences longer than this will be truncated, and sequences shorter \n"
+                             "than this will be padded.")
+    parser.add_argument("--num_ex",
+                        type=float,
+                        default=2000000000,
+                        help='number of examples to choose of train/dev/test dataset')
+
+
+
 
     # model parameters to replace in continual learning setting
     parser.add_argument("--replace_filler",
@@ -438,15 +461,27 @@ def define_args():
     ####################
     ## T-SNE and K-means
     ####################
+    parser.add_argument("--do_tsne",
+                        type=str2bool,
+                        default=False,
+                        help='Perform T-SNE on role/ filler vectors')
     parser.add_argument("--metric",
                         type=str,
                         default='euclidean',
                         help='T-SNE distance metric')
+    parser.add_argument("--tsne_label",
+                        type=str,
+                        default='pos',
+                        choices=['pos', 'ner', 'dep', 'tree', 'const'],
+                        help='T-SNE role label used to color the points')
+    parser.add_argument("--perplexity",
+                        type=int,
+                        default=4,
+                        help='T-SNE Number of threads')
     parser.add_argument("--n_jobs",
                         type=int,
                         default=4,
-                        help='T-SNE Number of threads'
-                        )
+                        help='T-SNE Number of threads')
     parser.add_argument("--n_components",
                         type=int,
                         default=2,
@@ -455,6 +490,10 @@ def define_args():
                         type=int,
                         default=1000,
                         help='T-SNE number of iterations')
+    parser.add_argument("--do_Kmeans",
+                        type=str2bool,
+                        default=False,
+                        help='Perform clustering on T-SNE projections')
     parser.add_argument("--n_clusters",
                         type=int,
                         default=10,
