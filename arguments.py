@@ -476,7 +476,7 @@ def define_args():
                         help='T-SNE role label used to color the points')
     parser.add_argument("--perplexity",
                         type=int,
-                        default=4,
+                        default=70,
                         help='T-SNE Number of threads')
     parser.add_argument("--n_jobs",
                         type=int,

@@ -106,6 +106,12 @@ def run(args, tag_type, target_tag):
             for val in v:
                 tag2role[k].update(prev_tag2role[val])
 
+    if args.prune:
+        prev_tag2role = tag2role.copy()
+        tag2role = defaultdict(Counter)
+        for tag, role in prev_tag2role.items():
+            tag2role[tag] = Counter({k: v for k, v in role.items() if v > args.threshold})
+
     prev_tag2role = tag2role.copy()
     tag2role = defaultdict(Counter)
     tag2sum = dict()
@@ -117,12 +123,6 @@ def run(args, tag_type, target_tag):
                 tag2role[tag] = Counter({k: float(v)/summ for k, v in role.items()})
             else:
                 tag2role[tag] = Counter({k: float(v) for k, v in role.items()})
-
-    if args.prune:
-        prev_tag2role = tag2role.copy()
-        tag2role = defaultdict(Counter)
-        for tag, role in prev_tag2role.items():
-            tag2role[tag] = Counter({k: v for k, v in role.items() if v > args.threshold})
 
     num_roles = len(role2tag.keys())
     num_tags = len(tag2role.keys())
@@ -227,5 +227,7 @@ if __name__ == '__main__':
             logger.info('Target tag is: {}'.format(target_tag))
             run(args, tag_type, target_tag)
     else:
+        logger.info('Processing tag type: {}'.format(args.tag_type))
+        logger.info('Target tag is: {}'.format(args.target_tag))
         run(args, args.tag_type, args.target_tag)
     logger.info('*** Process is completed! ***')

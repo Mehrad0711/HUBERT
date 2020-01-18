@@ -297,23 +297,25 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         else:
             all_tokens.append((tokens_a, ))
 
-        if example.pos_tagged_a:
-            if example.pos_tagged_b and not single_sentence:
+        # don't check for empty list but for None since it some cases
+        # tokens_b might be short and thus pos_tagged_b would be an empty list
+        if example.pos_tagged_a is not None:
+            if example.pos_tagged_b is not None and not single_sentence:
                 token_pos.append((example.pos_tagged_a, example.pos_tagged_b))
             else:
                 token_pos.append((example.pos_tagged_a,))
-        if example.ner_tagged_a:
-            if example.ner_tagged_b and not single_sentence:
+        if example.ner_tagged_a is not None:
+            if example.ner_tagged_b is not None and not single_sentence:
                 token_ner.append((example.ner_tagged_a, example.ner_tagged_b))
             else:
                 token_ner.append((example.ner_tagged_a,))
-        if example.dep_parsed_a:
-            if example.dep_parsed_b and not single_sentence:
+        if example.dep_parsed_a is not None:
+            if example.dep_parsed_b is not None and not single_sentence:
                 token_dep.append((example.dep_parsed_a, example.dep_parsed_b))
             else:
                 token_dep.append((example.dep_parsed_a,))
-        if example.const_parsed_a:
-            if example.const_parsed_b and not single_sentence:
+        if example.const_parsed_a is not None:
+            if example.const_parsed_b is not None and not single_sentence:
                 token_const.append((example.const_parsed_a, example.const_parsed_b))
             else:
                 token_const.append((example.const_parsed_a,))
