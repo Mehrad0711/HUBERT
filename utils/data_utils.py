@@ -1,13 +1,10 @@
 import logging
 import nltk
-from nltk.tag.stanford import StanfordPOSTagger, StanfordNERTagger
-from nltk.parse.stanford import StanfordDependencyParser
 from arguments import define_args
-import benepar
 from tqdm import tqdm
 
 nltk.download('punkt')
-benepar.download('benepar_en2')
+
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
@@ -17,12 +14,17 @@ logger = logging.getLogger(__name__)
 args = define_args()
 
 if args.return_POS:
+    from nltk.tag.stanford import StanfordPOSTagger
     pos_tagger = StanfordPOSTagger(args.pos_tagger_model, args.pos_tagger_jar)
 if args.return_NER:
+    from nltk.tag.stanford import StanfordNERTagger
     ner_tagger = StanfordNERTagger(args.ner_tagger_model, args.ner_tagger_jar)
 if args.return_DEP:
+    from nltk.parse.stanford import StanfordDependencyParser
     dep_parser = StanfordDependencyParser(args.dep_parser_model, args.dep_parser_jar)
 if args.return_CONST:
+    import benepar
+    benepar.download('benepar_en2')
     const_parser = benepar.Parser("benepar_en2")
 
 
