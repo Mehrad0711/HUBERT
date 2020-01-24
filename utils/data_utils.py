@@ -29,7 +29,6 @@ if args.return_CONST:
 
 
 def get_constituency_path_to_root(tree, leaf_index):
-
     parented_tree = nltk.tree.ParentedTree.convert(tree)
     path_to_leaf = parented_tree.leaf_treeposition(leaf_index)
     path_to_leaf_cut = path_to_leaf[:-1]
@@ -42,6 +41,7 @@ def get_constituency_path_to_root(tree, leaf_index):
         current = current.parent()
 
     return labels[:-1]
+
 
 def process_dep(tokens):
     dep_graph = next(dep_parser.parse(tokens))

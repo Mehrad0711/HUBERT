@@ -405,7 +405,7 @@ def define_args():
                         type=str,
                         default='topK',
                         help='method to retrieve tpr attention values',
-                        choices=['topK', 'sample', 'selectK', 'full'])
+                        choices=['topK', 'sample', 'selectK'])
     parser.add_argument("--data_split_attention",
                         type=str,
                         default='dev',
@@ -468,16 +468,17 @@ def define_args():
     parser.add_argument("--metric",
                         type=str,
                         default='euclidean',
+                        choices=['cosine', 'euclidean'],
                         help='T-SNE distance metric')
     parser.add_argument("--tsne_label",
                         type=str,
                         default='pos',
-                        choices=['pos', 'ner', 'dep', 'tree', 'const'],
+                        choices=['pos', 'ner', 'dep_edge', 'depth', 'const'],
                         help='T-SNE role label used to color the points')
     parser.add_argument("--perplexity",
                         type=int,
                         default=70,
-                        help='T-SNE Number of threads')
+                        help='T-SNE Number of neighbors')
     parser.add_argument("--n_jobs",
                         type=int,
                         default=4,

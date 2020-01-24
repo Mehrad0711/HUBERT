@@ -15,8 +15,8 @@ def evaluate(args, model, eval_dataloader, device, task_type, global_step=None, 
     eval_loss, eval_accuracy = 0, 0
     nb_eval_steps, nb_eval_examples = 0, 0
 
-    F_list = []
-    R_list = []
+    F_list, R_list = [], []
+    F_full, R_full = [], []
 
     for input_ids, input_mask, segment_ids, sub_word_masks, orig_to_token_maps, label_ids in tqdm(eval_dataloader, desc="Evaluating"):
         input_ids = input_ids.to(device)
@@ -30,7 +30,7 @@ def evaluate(args, model, eval_dataloader, device, task_type, global_step=None, 
             logits, tmp_eval_loss, (aFs, aRs) = model(input_ids, segment_ids, input_mask, sub_word_masks, label_ids)
 
         if save_tpr_attentions:
-            F_list, R_list = get_attention(args, aFs, aRs, orig_to_token_maps)
+            F_list, R_list, F_full, R_full = get_attention(args, aFs, aRs, orig_to_token_maps)
 
         logits = logits.detach().cpu().numpy()
         label_ids = label_ids.cpu().numpy()
@@ -54,4 +54,4 @@ def evaluate(args, model, eval_dataloader, device, task_type, global_step=None, 
               'global_step': global_step if args.do_train else 0,
               'loss': loss}
 
-    return result, (all_ids, F_list, R_list)
+    return result, (all_ids, F_list, R_list, F_full, R_full)

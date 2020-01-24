@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 
 def get_attention(args, aFs, aRs, orig_to_token_maps):
 
-    F_list = []
-    R_list = []
+    F_list, R_list = [], []
+    F_full, R_full = [], []
 
     if args.save_strategy == 'sample':
         for i, (aF_full, aR_all) in enumerate(zip(aFs, aRs)):
@@ -51,9 +51,6 @@ def get_attention(args, aFs, aRs, orig_to_token_maps):
         elif args.save_strategy == 'selectK':
             F_selected = torch.topk(aFs, k=args.K, dim=-1)[1][:,:,[-1]] # choose K th best index
             R_selected = torch.topk(aRs, k=args.K, dim=-1)[1][:,:,[-1]] # choose K th best index
-        elif args.save_strategy == 'full':
-            F_selected = aFs
-            R_selected = aRs
         for i, (input_F, input_R) in enumerate(zip(F_selected, R_selected)):
             map = orig_to_token_maps[i]
             index = map.tolist().index(-1)
@@ -63,7 +60,17 @@ def get_attention(args, aFs, aRs, orig_to_token_maps):
             F_list.append(torch.index_select(input_F, dim=0, index=orig_to_token_maps_unpadded).detach().cpu().tolist()[1:-1])
             R_list.append(torch.index_select(input_R, dim=0, index=orig_to_token_maps_unpadded).detach().cpu().tolist()[1:-1])
 
-    return F_list, R_list
+        # also save full embeddings for T-SNE and Kmeans
+        for i, (input_F, input_R) in enumerate(zip(aFs, aRs)):
+            map = orig_to_token_maps[i]
+            index = map.tolist().index(-1)
+            orig_to_token_maps_unpadded = map[:index]
+            # dim=0 is seq_length
+            # remove first and last token corresponding to [CLS] and [SEP] tokens
+            F_full.append(torch.index_select(input_F, dim=0, index=orig_to_token_maps_unpadded).detach().cpu().tolist()[1:-1])
+            R_full.append(torch.index_select(input_R, dim=0, index=orig_to_token_maps_unpadded).detach().cpu().tolist()[1:-1])
+
+    return F_list, R_list, F_full, R_full
 
 def calculate_purity(cluster_assignments, labels):
 
@@ -86,8 +93,8 @@ def calculate_purity(cluster_assignments, labels):
 
 def perform_tsne(args, vals, tsne_label):
 
-    label_mapping = {'pos': 'pos_tags', 'ner': 'ner_tags', 'dep': 'dep_edge',
-                     'tree': 'tree_depth', 'const': 'const_parse_path'}
+    label_mapping = {'pos': 'pos_tags', 'ner': 'ner_tags', 'dep_edge': 'dep_edge',
+                     'depth': 'tree_depth', 'const': 'const_parse_path'}
 
     data = vals.items()
     F_embeddings, R_embeddings, labels = [], [], []
@@ -99,13 +106,14 @@ def perform_tsne(args, vals, tsne_label):
                 tag2main[val] = k
 
     for id, val in data:
-        role, aFs, aRs = val[label_mapping[tsne_label]], val['all_aFs'], val['all_aRs']
+        role, aFs, aRs = val[label_mapping[tsne_label]], val['all_aFs_full'], val['all_aRs_full']
         # return main tag for pos label. Otherwise return the tag itself.
         labels.extend([tag2main.get(tag, tag) for tag in role])
         F_embeddings.extend(aFs)
         R_embeddings.extend(aRs)
 
     assert len(labels) == len(F_embeddings) == len(R_embeddings)
+    logger.info('***{} tokens are being processed for visualization***'.format(len(labels)))
 
     R_embeddings, F_embeddings, labels = np.array(R_embeddings), np.array(F_embeddings), np.array(labels)
 

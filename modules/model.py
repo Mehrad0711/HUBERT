@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 from transformers.modeling_bert import BertPreTrainedModel, BertModel
 from modules.encoders import RNNencoder, TPRencoder_lstm, TPRencoder_transformers
+from utils.model_utils import inductive_bias
 
 
 class BertForSequenceClassification_tpr(BertPreTrainedModel):
@@ -165,11 +166,10 @@ class BertForSequenceClassification_tpr(BertPreTrainedModel):
         logits = self.classifier(cls_input)
         total_loss = None
 
-        from utils.model_utils import inductive_bias
-
         inductive_loss = 0.0
         if self.inductive_reg != 0.0:
             inductive_loss = self.inductive_reg * (inductive_bias(aFs) + inductive_bias(aRs))
+            inductive_loss = inductive_loss.mean()
 
         if labels is not None:
             if self.task_type == 0:

@@ -48,7 +48,6 @@ import warnings
 warnings.simplefilter("ignore", UserWarning)
 warnings.simplefilter("ignore", FutureWarning)
 
-
 def main(args, logger):
 
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
@@ -273,13 +272,13 @@ def main(args, logger):
         #prepare data
         split = args.data_split_attention if args.save_tpr_attentions else 'dev'
 
-        return_mapping = {'pos': args.return_POS, 'ner': args.return_NER,
-                          'dep': args.return_DEP, 'const': args.return_CONST}
+        return_mapping = {'pos': args.return_POS, 'ner': args.return_NER, 'dep_edge': args.return_DEP,
+                           'depth': args.return_CONST, 'const': args.return_CONST}
 
         eval_dataloader, all_guids, structure_features = \
                             prepare_data_loader(args, processor, label_list, task_type, all_tasks[-1], tokenizer,
                                 single_sentence=args.single_sentence, split=split, return_pos_tags=return_mapping['pos'],
-                                return_ner_tags=return_mapping['ner'], return_dep_parse=return_mapping['dep'],
+                                return_ner_tags=return_mapping['ner'], return_dep_parse=return_mapping['dep_edge'],
                                 return_const_parse=return_mapping['const'])
 
         all_tokens, token_pos, token_ner, token_dep, token_const = structure_features
@@ -319,7 +318,7 @@ def main(args, logger):
 
         model.to(device)
         model.eval()
-        result, (all_ids, F_list, R_list) = evaluate(args, model, eval_dataloader, device, task_type,
+        result, (all_ids, F_list, R_list, F_full, R_full) = evaluate(args, model, eval_dataloader, device, task_type,
                                                      data_split=split, save_tpr_attentions=args.save_tpr_attentions)
 
         if not os.path.exists(os.path.join(args.output_dir, eval_task_name)):
@@ -331,7 +330,7 @@ def main(args, logger):
 
         if args.save_tpr_attentions:
             output_attention_file = os.path.join(*[args.output_dir, eval_task_name, "tpr_attention.txt"])
-            vals = prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, all_tokens, token_pos, token_ner, token_dep, token_const)
+            vals = prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, F_full, R_full, all_tokens, token_pos, token_ner, token_dep, token_const)
             if args.do_tsne:
                 if return_mapping[args.tsne_label]:
                     perform_tsne(args, vals, args.tsne_label)

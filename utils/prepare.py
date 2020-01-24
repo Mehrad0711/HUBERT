@@ -106,6 +106,7 @@ def prepare_optim(args, num_train_steps, param_optimizer):
         # elif args.optimizer == 'radam':
         #     optimizer = RAdam(optimizer_grouped_parameters,
         #                          lr=args.learning_rate)
+
         elif args.optimizer == 'sgd':
             optimizer = SGD(optimizer_grouped_parameters,
                                  lr=args.learning_rate)
@@ -218,13 +219,13 @@ def prepare_model(args, opt, num_labels, task_type, device, n_gpu, loading_path=
     return model, bert_config
 
 
-def prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, all_tokens, token_pos, token_ner, token_dep, token_const):
+def prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, F_full, R_full, all_tokens, token_pos, token_ner, token_dep, token_const):
 
     values = {}
+
     if args.single_sentence or eval_task_name.lower() in ['sst', 'cola']:
         index = 0
         tokens = [val[index] for val in all_tokens]
-        # tokens = [[subval[0].lower() for subval in val[index]] for val in token_pos]
         pos_tags = [[subval[1] for subval in val[index]] for val in token_pos]
         ner_tags = [[subval[1] for subval in val[index]] for val in token_ner]
         dep_parse_tokens = [[subval[0] for subval in val[index]] for val in token_dep]
@@ -275,8 +276,8 @@ def prepare_structure_values(args, eval_task_name, all_ids, F_list, R_list, all_
     bad_sents_count = 0
     for i in range(len(all_ids)):
         try:
-            assert len(tokens[i]) == len(F_list[i]) == len(R_list[i])
-            val_i = {'tokens': tokens[i], 'all_aFs': F_list[i], 'all_aRs': R_list[i]}
+            assert len(tokens[i]) == len(F_list[i]) == len(R_list[i]) == len(F_full[i]) == len(R_full[i])
+            val_i = {'tokens': tokens[i], 'all_aFs': F_list[i], 'all_aRs': R_list[i], 'all_aFs_full': F_full[i], 'all_aRs_full': R_full[i]}
             if args.return_POS:
                 assert len(pos_tags[i]) == len(tokens[i])
                 val_i.update({'pos_tags': pos_tags[i]})

@@ -5,7 +5,7 @@ python:
     - 3.6
 install:
     - pip install -U pip
-    - pip install --progress-bar off $(grep -v "apex" requirements.txt)
+    - pip install --progress-bar off $(grep -Ev "apex|benepar*" requirements.txt)
     - pip install flake8 
 
 before_script:
