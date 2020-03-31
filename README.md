@@ -19,7 +19,7 @@ better transfer among NLP tasks.
 ## Quickstart
 
 #### Setup Environment (Optional):
-1. Intall python3.6: https://www.python.org/downloads/release/python-360/
+1. Install python3.6: https://www.python.org/downloads/release/python-360/
 
 2. Install required libraries </br>
    `> pip3 install -r requirements.txt`
